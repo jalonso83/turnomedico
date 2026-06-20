@@ -1,0 +1,711 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  PLATFORM_ADMIN
+  DOCTOR
+  SECRETARY
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_PATIENT
+  CANCELLED_DOCTOR
+  NO_SHOW
+}
+
+enum AppointmentType {
+  FIRST_VISIT
+  FOLLOW_UP
+  EMERGENCY
+}
+
+enum AppointmentReason {
+  CONSULTATION
+  RESULTS_DELIVERY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  SUSPENDED
+}
+
+enum NotificationType {
+  CONFIRMATION
+  REMINDER_24H
+  REMINDER_1H
+  CANCELLATION
+  RESCHEDULE
+  YOUR_TURN
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ============================================
+// CORE MODELS
+// ============================================
+
+/// Consultorio/médico como unidad de negocio (tenant)
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  slug      String   @unique @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  doctorProfile       DoctorProfile?
+  users               User[]
+  schedules           Schedule[]
+  scheduleOverrides   ScheduleOverride[]
+  appointments        Appointment[]
+  tenantPatients      TenantPatient[]
+  notifications       Notification[]
+  reviews             Review[]
+  officeConfig        OfficeConfig?
+  subscription        Subscription?
+  consultationMetrics DoctorConsultationMetric[]
+  smartReminders      SmartReminder[]
+  consultationPayments ConsultationPayment[]
+
+  @@map("tenants")
+}
+
+/// Perfil médico público
+model DoctorProfile {
+  id       String @id @default(cuid())
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  specialty     String  @db.VarChar(100)
+  subspecialty  String? @db.VarChar(100)
+  licenseNumber String? @map("license_number") @db.VarChar(50) // Exequátur
+  bio           String? @db.Text
+  photoUrl      String? @map("photo_url") @db.Text
+
+  consultationFee Float? @map("consultation_fee")
+  currency        String @default("DOP") @db.VarChar(3)
+
+  // Datos de contacto
+  phone          String? @db.VarChar(20)
+  alternatePhone String? @map("alternate_phone") @db.VarChar(20)
+
+  // Ubicación del consultorio
+  consultorioName String? @map("consultorio_name") @db.VarChar(200) // "Centro Médico San Rafael"
+  address         String? @db.VarChar(300) // Dirección de Google Maps
+  floor           String? @db.VarChar(100) // "Piso 3, Suite 302"
+  reference       String? @db.VarChar(300) // "Frente al parque Colón"
+  city            String? @db.VarChar(100)
+  sector          String? @db.VarChar(100)
+  latitude        Float?
+  longitude       Float?
+  googlePlaceId   String? @map("google_place_id") @db.VarChar(300) // Google Maps Place ID
+
+  // Control de onboarding
+  onboardingCompleted Boolean @default(false) @map("onboarding_completed")
+  agendaActive        Boolean @default(false) @map("agenda_active") // Toggle para habilitar agenda pública
+
+  languages String[] @default(["es"])
+
+  ratingAvg       Float   @default(0) @map("rating_avg")
+  totalReviews    Int     @default(0) @map("total_reviews")
+  isPublicVisible Boolean @default(true) @map("is_public_visible")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  insurances DoctorInsurance[]
+
+  @@index([specialty])
+  @@index([city])
+  @@map("doctor_profiles")
+}
+
+/// Catálogo global de seguros médicos (ARS) reconocidos en RD
+model Insurance {
+  id        String   @id @default(cuid())
+  name      String   @unique @db.VarChar(120) // "ARS Humano"
+  slug      String   @unique @db.VarChar(80) // "humano"
+  shortName String?  @map("short_name") @db.VarChar(40) // "Humano"
+  logoUrl   String?  @map("logo_url") @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  doctors        DoctorInsurance[]
+  payments       ConsultationPayment[]
+  tenantPatients TenantPatient[]
+
+  @@index([isActive, sortOrder])
+  @@map("insurances")
+}
+
+/// Many-to-many: qué seguros acepta cada doctor + tarifa pactada por ARS
+model DoctorInsurance {
+  doctorProfileId String        @map("doctor_profile_id")
+  insuranceId     String        @map("insurance_id")
+  doctorProfile   DoctorProfile @relation(fields: [doctorProfileId], references: [id], onDelete: Cascade)
+  insurance       Insurance     @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+
+  // Tarifa pactada con esta ARS (la define el doctor en su configuración).
+  patientCopay      Float? @map("patient_copay")      // efectivo que paga el paciente
+  insuranceCoverage Float? @map("insurance_coverage") // monto que aporta la ARS
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@id([doctorProfileId, insuranceId])
+  @@index([insuranceId])
+  @@map("doctor_insurances")
+}
+
+/// Usuarios del sistema (médicos, secretarias, admin)
+model User {
+  id       String  @id @default(cuid())
+  tenantId String? @map("tenant_id")
+  tenant   Tenant? @relation(fields: [tenantId], references: [id])
+
+  email        String    @unique @db.VarChar(200)
+  passwordHash String    @map("password_hash") @db.VarChar(200)
+  role         UserRole
+  name         String    @db.VarChar(200)
+  phone        String?   @db.VarChar(20)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  // Permiso por-secretaria: ¿puede editar el horario semanal del doctor?
+  // Solo aplica a usuarios con rol SECRETARY (el doctor lo concede al invitarla).
+  canManageSchedule Boolean @default(true) @map("can_manage_schedule")
+
+  refreshToken String? @map("refresh_token") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relaciones para Smart Reminders
+  appointments        Appointment[]
+  consultationMetrics DoctorConsultationMetric[] @relation("DoctorMetrics")
+  registeredPayments  ConsultationPayment[]
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+/// Pacientes (identificados globalmente por teléfono)
+model Patient {
+  id          String    @id @default(cuid())
+  phone       String    @unique @db.VarChar(20)
+  name        String    @db.VarChar(200)
+  email       String?   @db.VarChar(200)
+  cedula      String?   @db.VarChar(20)
+  dateOfBirth DateTime? @map("date_of_birth")
+  gender      String?   @db.VarChar(10)
+  address     String?   @db.VarChar(300)
+
+  // PWA / Push
+  pushSubscription Json?   @map("push_subscription")
+  pushEnabled      Boolean @default(false) @map("push_enabled")
+  pwaInstalled     Boolean @default(false) @map("pwa_installed")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments   Appointment[]
+  notifications  Notification[]
+  reviews        Review[]
+  tenantPatients TenantPatient[]
+  smartReminders SmartReminder[]
+  payments       ConsultationPayment[]
+
+  @@map("patients")
+}
+
+/// Ficha del paciente por consultorio
+model TenantPatient {
+  id        String  @id @default(cuid())
+  tenantId  String  @map("tenant_id")
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  notes     String? @db.Text
+  insurance String? @db.VarChar(100) // legacy: nombre de ARS en texto libre (compatibilidad)
+
+  // ARS normalizada del paciente en este consultorio
+  insuranceId     String?    @map("insurance_id")
+  insuranceRef    Insurance? @relation(fields: [insuranceId], references: [id])
+  affiliateNumber String?    @map("affiliate_number") @db.VarChar(60) // nº de afiliado / contrato
+
+  isVip     Boolean @default(false) @map("is_vip")
+
+  // Antecedentes médicos (texto libre — Plan Pro)
+  bloodType            String? @map("blood_type") @db.VarChar(5) // A+, O-, etc.
+  allergies            String? @db.Text
+  chronicConditions    String? @map("chronic_conditions") @db.Text
+  currentMedications   String? @map("current_medications") @db.Text
+  surgeries            String? @db.Text
+  familyHistory        String? @map("family_history") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, patientId])
+  @@map("tenant_patients")
+}
+
+// ============================================
+// SCHEDULING
+// ============================================
+
+/// Horario semanal del médico
+model Schedule {
+  id       String @id @default(cuid())
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  dayOfWeek       Int // 0=Domingo, 1=Lunes ... 6=Sábado
+  startTime       String  @map("start_time") @db.VarChar(5) // HH:MM
+  endTime         String  @map("end_time") @db.VarChar(5) // HH:MM
+  slotDurationMin Int     @default(30) @map("slot_duration_min")
+  breakStart      String? @map("break_start") @db.VarChar(5) // HH:MM
+  breakEnd        String? @map("break_end") @db.VarChar(5) // HH:MM
+  isActive        Boolean @default(true) @map("is_active")
+
+  // Cupos máximos del día (null = sin tope). Lo declara el doctor.
+  maxAppointments Int?    @map("max_appointments")
+
+  @@unique([tenantId, dayOfWeek])
+  @@map("schedules")
+}
+
+/// Excepciones al horario (vacaciones, días especiales, bloqueos)
+model ScheduleOverride {
+  id       String @id @default(cuid())
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  date      DateTime @db.Date
+  isBlocked Boolean  @default(true) @map("is_blocked")
+  reason    String?  @db.VarChar(200)
+  startTime String?  @map("start_time") @db.VarChar(5)
+  endTime   String?  @map("end_time") @db.VarChar(5)
+
+  @@unique([tenantId, date])
+  @@map("schedule_overrides")
+}
+
+// ============================================
+// APPOINTMENTS
+// ============================================
+
+/// Citas/turnos médicos
+model Appointment {
+  id        String  @id @default(cuid())
+  tenantId  String  @map("tenant_id")
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  patientId String  @map("patient_id")
+  patient   Patient @relation(fields: [patientId], references: [id])
+  doctorId  String? @map("doctor_id")
+  doctor    User?   @relation(fields: [doctorId], references: [id])
+
+  date      DateTime @db.Date
+  // startTime/endTime opcionales: en el modelo "por turno" el paciente no escoge hora.
+  // Se mantienen para legacy y para doctores que quieran asignar hora específica.
+  startTime String?  @map("start_time") @db.VarChar(5) // HH:MM
+  endTime   String?  @map("end_time") @db.VarChar(5) // HH:MM
+
+  status        AppointmentStatus @default(PENDING)
+  type          AppointmentType   @default(FIRST_VISIT)
+  reason        AppointmentReason @default(CONSULTATION)
+  queuePosition Int?              @map("queue_position")
+
+  notes        String? @db.Text
+  cancelReason String? @map("cancel_reason") @db.VarChar(300)
+
+  arrivedAt   DateTime? @map("arrived_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  // NUEVO: Tracking de consultorio
+  enteredConsultoryAt DateTime? @map("entered_consultory_at")
+  leftConsultoryAt    DateTime? @map("left_consultory_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  notifications      Notification[]
+  review             Review?
+  consultationMetric DoctorConsultationMetric?
+  smartReminder      SmartReminder?
+  consultationNote   ConsultationNote?
+  vitalSigns         VitalSigns?
+  prescription       Prescription?
+  payment            ConsultationPayment?
+
+  @@index([tenantId, date])
+  @@index([tenantId, date, status])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([tenantId, date, startTime])
+  @@map("appointments")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id            String       @id @default(cuid())
+  tenantId      String       @map("tenant_id")
+  tenant        Tenant       @relation(fields: [tenantId], references: [id])
+  appointmentId String?      @map("appointment_id")
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  patientId     String       @map("patient_id")
+  patient       Patient      @relation(fields: [patientId], references: [id])
+
+  type    NotificationType
+  channel NotificationChannel
+  status  NotificationStatus  @default(PENDING)
+
+  scheduledAt  DateTime? @map("scheduled_at")
+  sentAt       DateTime? @map("sent_at")
+  content      String    @db.Text
+  externalId   String?   @map("external_id") @db.VarChar(200)
+  errorMessage String?   @map("error_message") @db.Text
+
+  cost         Float   @default(0)
+  delivered    Boolean @default(false)
+  opened       Boolean @default(false)
+  fallbackUsed Boolean @default(false) @map("fallback_used")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([scheduledAt, status])
+  @@index([tenantId, patientId])
+  @@map("notifications")
+}
+
+// ============================================
+// REVIEWS
+// ============================================
+
+model Review {
+  id            String      @id @default(cuid())
+  tenantId      String      @map("tenant_id")
+  tenant        Tenant      @relation(fields: [tenantId], references: [id])
+  patientId     String      @map("patient_id")
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  appointmentId String      @unique @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+
+  rating    Int // 1-5
+  comment   String? @db.Text
+  isVisible Boolean @default(true) @map("is_visible")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, isVisible])
+  @@map("reviews")
+}
+
+// ============================================
+// OFFICE CONFIG (Sala de espera)
+// ============================================
+
+model OfficeConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  displayName    String  @map("display_name") @db.VarChar(200)
+  welcomeMessage String? @map("welcome_message") @db.VarChar(500)
+  logoUrl        String? @map("logo_url") @db.VarChar(500)
+
+  theme         String @default("LIGHT") @db.VarChar(10) // LIGHT, DARK, AUTO
+  primaryColor  String @default("#0066CC") @map("primary_color") @db.VarChar(7)
+  announcements Json? // Array de anuncios para mostrar en pantalla
+
+  showEstimatedWait Boolean @default(true) @map("show_estimated_wait")
+  showQueuePosition Boolean @default(true) @map("show_queue_position")
+
+  displayToken String @unique @default(cuid()) @map("display_token")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("office_configs")
+}
+
+// ============================================
+// BILLING
+// ============================================
+
+model Plan {
+  id           String @id @default(cuid())
+  name         String @db.VarChar(50)
+  slug         String @unique @db.VarChar(50)
+  priceMonthly Float  @map("price_monthly")
+  priceYearly  Float? @map("price_yearly")
+  currency     String @default("USD") @db.VarChar(3)
+
+  maxAppointments Int?  @map("max_appointments") // null = ilimitado
+  maxSecretaries  Int   @default(1) @map("max_secretaries")
+  features        Json? // Feature flags del plan
+
+  hasDisplayMode Boolean @default(false) @map("has_display_mode")
+  hasAnalytics   Boolean @default(false) @map("has_analytics")
+
+  stripePriceIdMo String? @map("stripe_price_id_mo") @db.VarChar(100)
+  stripePriceIdYr String? @map("stripe_price_id_yr") @db.VarChar(100)
+
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id       String @id @default(cuid())
+  tenantId String @unique @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  planId   String @map("plan_id")
+  plan     Plan   @relation(fields: [planId], references: [id])
+
+  status               SubscriptionStatus @default(TRIAL)
+  stripeCustomerId     String?            @map("stripe_customer_id") @db.VarChar(100)
+  stripeSubscriptionId String?            @map("stripe_subscription_id") @db.VarChar(100)
+
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  invoices Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  subscriptionId String       @map("subscription_id")
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+
+  amount   Float
+  currency String        @default("USD") @db.VarChar(3)
+  status   InvoiceStatus @default(DRAFT)
+
+  stripeInvoiceId String? @map("stripe_invoice_id") @db.VarChar(100)
+  pdfUrl          String? @map("pdf_url") @db.VarChar(500)
+
+  periodStart DateTime  @map("period_start")
+  periodEnd   DateTime  @map("period_end")
+  paidAt      DateTime? @map("paid_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([subscriptionId])
+  @@map("invoices")
+}
+
+// ============================================
+// SMART REMINDERS
+// ============================================
+
+/// Métricas de duración de consultas por doctor
+model DoctorConsultationMetric {
+  id            String @id @default(cuid())
+  tenantId      String @map("tenant_id")
+  doctorId      String @map("doctor_id")
+  appointmentId String @unique @map("appointment_id")
+
+  // Duración REAL en consultorio (en minutos)
+  consultoryDurationMin Int
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  doctor      User        @relation("DoctorMetrics", fields: [doctorId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([doctorId, tenantId])
+  @@index([createdAt])
+  @@map("doctor_consultation_metrics")
+}
+
+// ============================================
+// MEDICAL RECORDS (EMR — Plan Pro)
+// ============================================
+
+/// Nota SOAP de la consulta (1:1 con Appointment)
+model ConsultationNote {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  tenantId      String @map("tenant_id")
+
+  subjective String? @db.Text // S - Motivo de consulta / anamnesis
+  objective  String? @db.Text // O - Examen físico / hallazgos
+  assessment String? @db.Text // A - Diagnóstico / impresión clínica
+  plan       String? @db.Text // P - Indicaciones / próximos pasos
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("consultation_notes")
+}
+
+/// Signos vitales tomados en la cita (1:1 con Appointment)
+model VitalSigns {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  tenantId      String @map("tenant_id")
+
+  bloodPressureSys Int?   @map("blood_pressure_sys") // mmHg
+  bloodPressureDia Int?   @map("blood_pressure_dia") // mmHg
+  heartRate        Int?   @map("heart_rate") // lpm
+  respiratoryRate  Int?   @map("respiratory_rate") // rpm
+  temperature      Float? // °C
+  weight           Float? // kg
+  height           Float? // cm
+  oxygenSaturation Int?   @map("oxygen_saturation") // %
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("vital_signs")
+}
+
+/// Receta médica de la cita (1:1 con Appointment)
+model Prescription {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  tenantId      String @map("tenant_id")
+
+  // items: JSON array de { drug, dose, frequency, duration, instructions }
+  items Json?
+  notes String? @db.Text // Indicaciones adicionales
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("prescriptions")
+}
+
+/// Cobro de la consulta (1:1 con Appointment). Lo registra la secretaria.
+/// Efectivo del paciente + (opcional) aporte de la ARS.
+model ConsultationPayment {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  tenantId      String @map("tenant_id")
+  patientId     String @map("patient_id")
+
+  fee             Float   @default(0) // tarifa de referencia de la consulta
+  cashAmount      Float   @default(0) @map("cash_amount") // efectivo que paga el paciente
+  insuranceId     String? @map("insurance_id") // ARS, si aplica
+  insuranceAmount Float   @default(0) @map("insurance_amount") // aporte de la ARS
+  currency        String  @default("DOP") @db.VarChar(3)
+  isCourtesy      Boolean @default(false) @map("is_courtesy")
+
+  registeredById String? @map("registered_by_id") // usuario que cobró (auditoría)
+  notes          String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  patient     Patient     @relation(fields: [patientId], references: [id])
+  insurance   Insurance?  @relation(fields: [insuranceId], references: [id])
+  registeredBy User?      @relation(fields: [registeredById], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([insuranceId])
+  @@map("consultation_payments")
+}
+
+/// Sistema inteligente de recordatorios (Smart Reminders)
+model SmartReminder {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  patientId     String @map("patient_id")
+  tenantId      String @map("tenant_id")
+
+  // Ubicaciones
+  clinicLat  Float? @map("clinic_lat")
+  clinicLng  Float? @map("clinic_lng")
+  patientLat Float? @map("patient_lat")
+  patientLng Float? @map("patient_lng")
+
+  // Cálculos
+  averageDoctorConsultoryMin Int @map("average_doctor_consultory_min")
+  bufferMin                  Int @map("buffer_min")
+  travelTimeMin              Int @map("travel_time_min")
+  totalTimeNeededMin         Int @map("total_time_needed_min")
+
+  suggestedDepartureTime DateTime  @map("suggested_departure_time")
+  reminderSentAt         DateTime? @map("reminder_sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  patient     Patient     @relation(fields: [patientId], references: [id])
+
+  @@index([appointmentId])
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("smart_reminders")
+}

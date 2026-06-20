@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────
+# Dependencias
+# ─────────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.*
+
+# ─────────────────────────────────────────────
+# Variables de entorno / secretos (NUNCA subir)
+# ─────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# ─────────────────────────────────────────────
+# Builds / output compilado
+# ─────────────────────────────────────────────
+dist/
+build/
+/out/
+.next/
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma (cliente generado)
+**/generated/prisma
+
+# ─────────────────────────────────────────────
+# Logs
+# ─────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ─────────────────────────────────────────────
+# Testing
+# ─────────────────────────────────────────────
+/coverage
+
+# ─────────────────────────────────────────────
+# Sistema operativo / editor
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.pem
+.idea/
+.vscode/
