@@ -381,7 +381,7 @@ export default function HomePage() {
               },
               {
                 name: "Básico",
-                price: "RD$1,500",
+                price: "RD$0",
                 period: "/mes",
                 desc: "Médico individual",
                 features: ["200 citas/mes", "Agenda + pantalla sala espera", "1 secretaria", "Push + SMS", "Perfil público"],
@@ -391,7 +391,7 @@ export default function HomePage() {
               },
               {
                 name: "Profesional",
-                price: "RD$2,900",
+                price: "RD$0",
                 period: "/mes",
                 desc: "Consultorio completo",
                 features: ["Citas ilimitadas", "Todo del Básico", "3 secretarias", "Reportes avanzados", "Métricas de rendimiento", "Soporte prioritario"],
