@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { publicApi } from "@/lib/api";
+import InstallAppCard from "@/components/pwa/InstallAppCard";
 import {
   Star,
   MapPin,
@@ -17,7 +18,6 @@ import {
   User,
   Loader2,
   AlertCircle,
-  Download,
   CalendarDays,
   Info,
   Stethoscope,
@@ -396,17 +396,7 @@ export default function DoctorProfilePage() {
             Te enviaremos un recordatorio 24h y 1h antes de tu cita
           </p>
 
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-            <div className="flex items-center gap-3">
-              <Download className="w-5 h-5 text-blue-mid shrink-0" strokeWidth={1.5} />
-              <div className="text-left">
-                <p className="text-sm font-medium text-navy">Instala la app</p>
-                <p className="text-xs text-gray-600">
-                  Para recibir recordatorios automaticos de tus citas
-                </p>
-              </div>
-            </div>
-          </div>
+          <InstallAppCard />
 
           <div className="flex flex-col gap-3">
             <Link
