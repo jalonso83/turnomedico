@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import FollowUpModal from "@/components/FollowUpModal";
 import {
   ChevronLeft,
   ClipboardList,
@@ -22,6 +23,7 @@ import {
   Phone,
   Cake,
   IdCard,
+  CalendarPlus,
 } from "lucide-react";
 import { getToken, dashboard } from "@/lib/api";
 
@@ -158,6 +160,8 @@ export default function AtenderCitaPage() {
   const [rxNotes, setRxNotes] = useState("");
   const [savingRx, setSavingRx] = useState(false);
   const [rxMsg, setRxMsg] = useState("");
+  const [showFollowUp, setShowFollowUp] = useState(false);
+  const [followUpMsg, setFollowUpMsg] = useState("");
 
   // Refs para autosave (evitan closures obsoletos al guardar al salir / cambiar tab)
   const mountedRef = useRef(true);
@@ -412,18 +416,38 @@ export default function AtenderCitaPage() {
                   VIP
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
+                  record.appointment.reason === "FOLLOW_UP"
+                    ? "bg-violet-50 text-violet-700"
+                    : "bg-blue-50 text-blue-700"
+                }`}
+              >
                 {record.appointment.reason === "RESULTS_DELIVERY" ? (
                   <FileText className="w-3 h-3" strokeWidth={1.5} />
                 ) : (
                   <Stethoscope className="w-3 h-3" strokeWidth={1.5} />
                 )}
-                {record.appointment.reason === "RESULTS_DELIVERY" ? "Entrega resultados" : "Consulta"}
+                {record.appointment.reason === "RESULTS_DELIVERY"
+                  ? "Entrega resultados"
+                  : record.appointment.reason === "FOLLOW_UP"
+                    ? "Seguimiento"
+                    : "Consulta"}
               </span>
               {record.appointment.queuePosition != null && (
                 <span className="text-xs text-gray-500">Turno #{record.appointment.queuePosition}</span>
               )}
+              <button
+                onClick={() => setShowFollowUp(true)}
+                className="ml-auto inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-teal text-teal hover:bg-teal/5"
+              >
+                <CalendarPlus className="w-3.5 h-3.5" strokeWidth={1.5} />
+                Agendar seguimiento
+              </button>
             </div>
+            {followUpMsg && (
+              <p className="mt-1.5 text-xs text-green-700">{followUpMsg}</p>
+            )}
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
               <span className="inline-flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-gray-400" strokeWidth={1.5} />
@@ -714,6 +738,21 @@ export default function AtenderCitaPage() {
           :global(.print-only) { display: block !important; }
         }
       `}</style>
+
+      {showFollowUp && (
+        <FollowUpModal
+          patientId={record.appointment.patient.id}
+          patientName={record.appointment.patient.name}
+          parentAppointmentId={record.appointment.id}
+          onClose={() => setShowFollowUp(false)}
+          onCreated={(fecha) => {
+            setShowFollowUp(false);
+            setFollowUpMsg(
+              `Seguimiento agendado para el ${fecha}. La secretaria le asignara su turno.`,
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -17,10 +17,11 @@ import {
   FileText,
   ClipboardList,
   Banknote,
+  Repeat,
 } from "lucide-react";
 import PaymentModal from "@/components/PaymentModal";
 
-type AppointmentReason = "CONSULTATION" | "RESULTS_DELIVERY";
+type AppointmentReason = "CONSULTATION" | "RESULTS_DELIVERY" | "FOLLOW_UP";
 
 const REASON_CONFIG: Record<
   AppointmentReason,
@@ -37,6 +38,12 @@ const REASON_CONFIG: Record<
     bg: "bg-amber-50",
     text: "text-amber-700",
     icon: FileText,
+  },
+  FOLLOW_UP: {
+    label: "Seguimiento",
+    bg: "bg-violet-50",
+    text: "text-violet-700",
+    icon: Repeat,
   },
 };
 import Link from "next/link";
@@ -96,7 +103,10 @@ export default function AgendaPage() {
   const [showWalkIn, setShowWalkIn] = useState(false);
   const [walkInName, setWalkInName] = useState("");
   const [walkInPhone, setWalkInPhone] = useState("");
-  const [walkInReason, setWalkInReason] = useState<AppointmentReason>("CONSULTATION");
+  // El paciente que llega de golpe nunca es un seguimiento: el seguimiento
+  // se agenda desde la consulta, con su cita de origen.
+  const [walkInReason, setWalkInReason] =
+    useState<"CONSULTATION" | "RESULTS_DELIVERY">("CONSULTATION");
   const [walkInLoading, setWalkInLoading] = useState(false);
   const [tenantSlug, setTenantSlug] = useState("");
   const [payingAppt, setPayingAppt] = useState<{ id: string; name: string } | null>(null);

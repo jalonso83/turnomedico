@@ -23,6 +23,8 @@ export class PaymentsService {
         reason: true,
         status: true,
         date: true,
+        parentAppointmentId: true,
+        parentAppointment: { select: { id: true, date: true } },
         patient: { select: { id: true, name: true } },
       },
     });
@@ -45,6 +47,8 @@ export class PaymentsService {
       select: {
         consultationFee: true,
         currency: true,
+        followUpFreeDays: true,
+        followUpFee: true,
         insurances: {
           select: {
             patientCopay: true,
@@ -80,6 +84,34 @@ export class PaymentsService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
 
+    // Tarifa de la consulta según el motivo de la cita.
+    // Un seguimiento dentro de la ventana no se cobra; fuera de ella se cobra
+    // la tarifa de seguimiento, y si no está configurada, la de consulta.
+    const feeConsulta = profile?.consultationFee ?? null;
+    let fee = feeConsulta;
+    let motivoTarifa: string | null = null;
+
+    if (appointment.reason === 'FOLLOW_UP') {
+      const ventana = profile?.followUpFreeDays ?? 30;
+      const origen = appointment.parentAppointment?.date ?? null;
+      const dias = origen
+        ? Math.round(
+            (appointment.date.getTime() - origen.getTime()) / (1000 * 60 * 60 * 24),
+          )
+        : null;
+
+      if (dias != null && dias <= ventana) {
+        fee = 0;
+        motivoTarifa = `Seguimiento dentro de los ${ventana} días: no se cobra la consulta`;
+      } else {
+        fee = profile?.followUpFee ?? feeConsulta;
+        motivoTarifa =
+          dias == null
+            ? 'Seguimiento sin consulta de origen registrada'
+            : `Seguimiento fuera de la ventana de ${ventana} días`;
+      }
+    }
+
     return {
       data: {
         appointment: {
@@ -87,8 +119,13 @@ export class PaymentsService {
           reason: appointment.reason,
           status: appointment.status,
           patient: appointment.patient,
+          parentAppointmentId: appointment.parentAppointmentId,
         },
-        fee: profile?.consultationFee ?? null,
+        fee,
+        /** Tarifa normal de consulta, por si el doctor quiere cobrarla igual. */
+        consultationFee: feeConsulta,
+        /** Explicación de por qué se propone esta tarifa. null si es lo normal. */
+        feeReason: motivoTarifa,
         currency: profile?.currency ?? 'DOP',
         insurances: (profile?.insurances ?? []).map((di) => ({
           id: di.insurance.id,

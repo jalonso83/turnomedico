@@ -207,6 +207,35 @@ export const dashboard = {
       { method: "POST", body: JSON.stringify({ date }), token },
     ),
 
+  /** Disponibilidad de un día, autenticada (para agendar desde el dashboard). */
+  getSlots: (date: string, token: string) =>
+    api<{
+      date: string;
+      dayOpen: boolean;
+      doctorStartTime: string | null;
+      maxAppointments: number | null;
+      takenCount: number;
+      availableCount: number | null;
+      reason?: "blocked" | "closed" | "full";
+    }>(`/dashboard/appointments/slots?date=${date}`, { token }),
+
+  /** Agenda una cita futura para un paciente que ya existe. Permite SEGUIMIENTO. */
+  createAppointment: (
+    data: {
+      patientId: string;
+      date: string;
+      reason: "CONSULTATION" | "RESULTS_DELIVERY" | "FOLLOW_UP";
+      parentAppointmentId?: string | null;
+      notes?: string;
+    },
+    token: string,
+  ) =>
+    api<{ id: string; date: string; reason: string }>("/dashboard/appointments", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+
   /** Deja constancia de que se le avisó el turno al paciente. */
   markNotified: (appointmentId: string, content: string, token: string) =>
     api<{ id: string; sentAt: string }>(
@@ -494,6 +523,10 @@ export const dashboard = {
         patient: { id: string; name: string };
       };
       fee: number | null;
+      /** Tarifa normal de consulta, por si se quiere cobrar igual. */
+      consultationFee: number | null;
+      /** Por qué se propone esa tarifa (seguimiento gratis, etc). */
+      feeReason: string | null;
       currency: string;
       insurances: Array<{
         id: string;

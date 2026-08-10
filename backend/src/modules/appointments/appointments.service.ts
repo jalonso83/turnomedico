@@ -31,6 +31,23 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
 export class AppointmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Valida y convierte una fecha 'YYYY-MM-DD'.
+   * El regex por si solo no basta: '2026-13-45' tiene la forma correcta pero
+   * no existe, y producia un Invalid Date que reventaba en la consulta con un
+   * 500 en vez de un 400.
+   */
+  private parseDate(dateStr: string): Date {
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
+    }
+    const d = dateOnlyUTC(dateStr);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== dateStr) {
+      throw new BadRequestException('Esa fecha no existe en el calendario');
+    }
+    return d;
+  }
+
   async getTodayAppointments(tenantId: string) {
     return this.getAppointmentsByDate(tenantId);
   }
@@ -40,10 +57,7 @@ export class AppointmentsService {
    * La secretaria necesita poder abrir días futuros para prepararlos.
    */
   async getAppointmentsByDate(tenantId: string, dateStr?: string) {
-    if (dateStr && !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
-    }
-    const today = dateStr ? dateOnlyUTC(dateStr) : this.getTodayDR();
+    const today = dateStr ? this.parseDate(dateStr) : this.getTodayDR();
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
@@ -126,7 +140,6 @@ export class AppointmentsService {
       startTime: a.startTime,
       endTime: a.endTime,
       status: a.status,
-      type: a.type,
       reason: a.reason,
       queuePosition: a.queuePosition,
       /** Cuándo se le avisó su turno. null = todavía no se le ha avisado. */
@@ -164,10 +177,7 @@ export class AppointmentsService {
    * paciente ya está en el consultorio, su turno está en curso.
    */
   async reorderQueue(tenantId: string, dateStr: string, orderedIds: string[]) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
-    }
-    const date = dateOnlyUTC(dateStr);
+    const date = this.parseDate(dateStr);
 
     const delDia = await this.prisma.appointment.findMany({
       where: { tenantId, date, status: { notIn: this.DEAD_STATUSES } },
@@ -218,10 +228,7 @@ export class AppointmentsService {
    * Las nuevas se numeran a continuación, por orden de llegada de la reserva.
    */
   async confirmDay(tenantId: string, dateStr: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
-    }
-    const date = dateOnlyUTC(dateStr);
+    const date = this.parseDate(dateStr);
 
     const citas = await this.prisma.appointment.findMany({
       where: { tenantId, date, status: { notIn: this.DEAD_STATUSES } },
@@ -260,6 +267,80 @@ export class AppointmentsService {
       },
       message: 'Día confirmado',
     };
+  }
+
+  /**
+   * Crea una cita futura desde el dashboard, para un paciente que ya existe.
+   *
+   * Es la pieza que faltaba: `walk-in` solo sirve para hoy y a la hora actual,
+   * y lo único que agendaba a futuro era la reserva pública, que resuelve al
+   * paciente por nombre y teléfono en vez de por id.
+   *
+   * La cita nace CONFIRMED y SIN turno: el número lo pone la secretaria al
+   * ordenar el día, igual que con las reservas web.
+   */
+  async createAppointment(
+    tenantId: string,
+    dto: {
+      patientId: string;
+      date: string;
+      reason: 'CONSULTATION' | 'RESULTS_DELIVERY' | 'FOLLOW_UP';
+      parentAppointmentId?: string | null;
+      notes?: string;
+    },
+  ) {
+    const date = this.parseDate(dto.date);
+
+    // El paciente tiene que estar en la ficha de ESTE consultorio.
+    const vinculo = await this.prisma.tenantPatient.findUnique({
+      where: { tenantId_patientId: { tenantId, patientId: dto.patientId } },
+      select: { id: true },
+    });
+    if (!vinculo) {
+      throw new NotFoundException('Paciente no encontrado en este consultorio');
+    }
+
+    if (dto.parentAppointmentId) {
+      const padre = await this.prisma.appointment.findFirst({
+        where: { id: dto.parentAppointmentId, tenantId, patientId: dto.patientId },
+        select: { id: true },
+      });
+      if (!padre) {
+        throw new BadRequestException(
+          'La consulta de origen no existe o es de otro paciente',
+        );
+      }
+    }
+
+    // Misma disponibilidad que usa la reserva pública.
+    const dispo = await this.getAvailabilityForTenant(tenantId, dto.date);
+    const d = dispo.data;
+    if (!d.dayOpen) {
+      throw new BadRequestException(
+        d.reason === 'blocked' ? 'El doctor no atiende ese día' : 'Día no laboral',
+      );
+    }
+    if (d.availableCount != null && d.availableCount <= 0) {
+      throw new ConflictException('Ya no quedan cupos para ese día');
+    }
+
+    const appointment = await this.prisma.appointment.create({
+      data: {
+        tenantId,
+        patientId: dto.patientId,
+        date,
+        startTime: null,
+        endTime: null,
+        queuePosition: null,
+        status: 'CONFIRMED',
+        reason: dto.reason,
+        parentAppointmentId: dto.parentAppointmentId ?? null,
+        notes: dto.notes ?? null,
+      },
+      include: { patient: { select: { id: true, name: true, phone: true } } },
+    });
+
+    return { data: appointment, message: 'Cita agendada' };
   }
 
   /**
@@ -370,7 +451,6 @@ export class AppointmentsService {
         startTime: updated.startTime,
         endTime: updated.endTime,
         status: updated.status,
-        type: updated.type,
         queuePosition: updated.queuePosition,
         patient: updated.patient,
         arrivedAt: updated.arrivedAt,
@@ -440,7 +520,6 @@ export class AppointmentsService {
         startTime: nowTime,
         endTime,
         status: 'ARRIVED',
-        type: 'FIRST_VISIT',
         reason: data.reason ?? 'CONSULTATION',
         queuePosition: nextQueue,
         arrivedAt: new Date(),
@@ -460,7 +539,6 @@ export class AppointmentsService {
         startTime: appointment.startTime,
         endTime: appointment.endTime,
         status: appointment.status,
-        type: appointment.type,
         reason: appointment.reason,
         queuePosition: appointment.queuePosition,
         patient: appointment.patient,
@@ -495,7 +573,7 @@ export class AppointmentsService {
       throw new BadRequestException('La agenda de este doctor no está activa');
     }
 
-    const date = dateOnlyUTC(dto.date);
+    const date = this.parseDate(dto.date);
     const tenantId = tenant.id;
     const dayOfWeek = date.getUTCDay();
 
@@ -574,8 +652,7 @@ export class AppointmentsService {
           endTime: null,
           queuePosition: null,
           status: 'PENDING',
-          type: 'FIRST_VISIT',
-          reason: dto.reason,
+            reason: dto.reason,
         },
       });
 
@@ -611,11 +688,18 @@ export class AppointmentsService {
       throw new NotFoundException('Doctor no encontrado');
     }
 
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
-    }
+    return this.getAvailabilityForTenant(tenant.id, date);
+  }
 
-    const dateObj = dateOnlyUTC(date);
+  /**
+   * Disponibilidad de un día por tenantId.
+   * Antes esta lógica solo existía dentro del flujo público por slug, así que
+   * el dashboard no podía consultarla para agendar.
+   */
+  async getAvailabilityForTenant(tenantId: string, date: string) {
+    const tenant = { id: tenantId };
+
+    const dateObj = this.parseDate(date);
     const dayOfWeek = dateObj.getUTCDay();
 
     const baseResponse = {
@@ -729,7 +813,6 @@ export class AppointmentsService {
       queuePosition: appointment.queuePosition,
       doctorStartTime,
       status: appointment.status,
-      type: appointment.type,
       reason: appointment.reason,
       doctorName: appointment.tenant.users[0]?.name ?? appointment.tenant.name,
       specialty: appointment.tenant.doctorProfile?.specialty,

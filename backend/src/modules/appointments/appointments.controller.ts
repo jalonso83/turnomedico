@@ -15,7 +15,12 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { AppointmentsService } from './appointments.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AppointmentReasonEnum } from './dto/book-appointment.dto';
-import { ConfirmDayDto, MarkNotifiedDto, ReorderQueueDto } from './dto/queue.dto';
+import {
+  ConfirmDayDto,
+  CreateAppointmentDto,
+  MarkNotifiedDto,
+  ReorderQueueDto,
+} from './dto/queue.dto';
 
 @ApiTags('Dashboard - Appointments')
 @ApiBearerAuth()
@@ -37,6 +42,27 @@ export class AppointmentsController {
   @ApiQuery({ name: 'date', required: false, description: 'YYYY-MM-DD (default: hoy)' })
   async getByDate(@CurrentTenant() tenantId: string, @Query('date') date?: string) {
     return this.appointmentsService.getAppointmentsByDate(tenantId, date);
+  }
+
+  @Get('slots')
+  @ApiOperation({ summary: 'Disponibilidad de un día (autenticado, para agendar)' })
+  @ApiQuery({ name: 'date', required: true, description: 'YYYY-MM-DD' })
+  async slots(@CurrentTenant() tenantId: string, @Query('date') date: string) {
+    return this.appointmentsService.getAvailabilityForTenant(tenantId, date);
+  }
+
+  @Post()
+  @ApiOperation({
+    summary: 'Agendar una cita futura para un paciente existente (permite SEGUIMIENTO)',
+  })
+  async create(@CurrentTenant() tenantId: string, @Body() dto: CreateAppointmentDto) {
+    return this.appointmentsService.createAppointment(tenantId, {
+      patientId: dto.patientId,
+      date: dto.date,
+      reason: dto.reason,
+      parentAppointmentId: dto.parentAppointmentId,
+      notes: dto.notes,
+    });
   }
 
   @Put('reorder')

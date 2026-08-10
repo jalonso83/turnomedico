@@ -28,15 +28,23 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+/// OBSOLETO: reemplazado por AppointmentReason.FOLLOW_UP.
+/// La columna sigue en la BD solo para no romper el backend desplegado
+/// mientras sale este cambio. Se elimina en cuanto el deploy este vivo.
 enum AppointmentType {
   FIRST_VISIT
   FOLLOW_UP
   EMERGENCY
 }
 
+/// Motivo de la cita. Una sola etiqueta con tres opciones.
+/// FOLLOW_UP lo asigna el doctor o la secretaria desde el dashboard:
+/// NO se ofrece en la reserva publica, porque el seguimiento dentro de la
+/// ventana no se cobra y el paciente podria autoasignarselo.
 enum AppointmentReason {
   CONSULTATION
   RESULTS_DELIVERY
+  FOLLOW_UP
 }
 
 enum SubscriptionStatus {
@@ -125,6 +133,12 @@ model DoctorProfile {
 
   consultationFee Float? @map("consultation_fee")
   currency        String @default("DOP") @db.VarChar(3)
+
+  /// El seguimiento no se cobra si ocurre dentro de esta ventana desde la
+  /// consulta de origen. Fuera de ella se cobra followUpFee, y si es null,
+  /// la tarifa normal de consulta.
+  followUpFreeDays Int    @default(30) @map("follow_up_free_days")
+  followUpFee      Float? @map("follow_up_fee")
 
   // Datos de contacto
   phone          String? @db.VarChar(20)
@@ -400,12 +414,19 @@ model Appointment {
   endTime   String?  @map("end_time") @db.VarChar(5) // HH:MM
 
   status        AppointmentStatus @default(PENDING)
+  /// OBSOLETO: no se lee ni se escribe. Pendiente de eliminar (ver enum).
   type          AppointmentType   @default(FIRST_VISIT)
   reason        AppointmentReason @default(CONSULTATION)
   queuePosition Int?              @map("queue_position")
 
   notes        String? @db.Text
   cancelReason String? @map("cancel_reason") @db.VarChar(300)
+
+  /// Consulta de la que salio este seguimiento. Permite calcular si cae
+  /// dentro de la ventana en la que el seguimiento no se cobra.
+  parentAppointmentId String?       @map("parent_appointment_id")
+  parentAppointment   Appointment?  @relation("FollowUps", fields: [parentAppointmentId], references: [id])
+  followUps           Appointment[] @relation("FollowUps")
 
   arrivedAt   DateTime? @map("arrived_at")
   startedAt   DateTime? @map("started_at")
@@ -432,6 +453,7 @@ model Appointment {
   @@index([patientId])
   @@index([doctorId])
   @@index([tenantId, date, startTime])
+  @@index([parentAppointmentId])
   @@map("appointments")
 }
 
