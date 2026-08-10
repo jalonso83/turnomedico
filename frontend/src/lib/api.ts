@@ -120,6 +120,31 @@ export const publicApi = {
 };
 
 // ── Dashboard endpoints (require auth) ─────────────────────────
+/** Tarifa pactada de un servicio con una ARS. */
+export interface ServiceInsuranceTariff {
+  insuranceId: string;
+  name: string;
+  shortName: string | null;
+  /** Efectivo que pone el paciente. null = no configurado. */
+  patientCopay: number | null;
+  /** Aporte de la ARS. null = no configurado. */
+  insuranceCoverage: number | null;
+}
+
+/** Servicio del catálogo del doctor. `price` es el precio sin seguro. */
+export interface ServiceItem {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  category: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  insurances: ServiceInsuranceTariff[];
+}
+
 export const dashboard = {
   // ── Tenant ────────────────────────────────────────────────
   getTenant: (token: string) =>
@@ -545,6 +570,69 @@ export const dashboard = {
 
   deleteStaff: (id: string, token: string) =>
     api(`/dashboard/staff/${id}`, { method: "DELETE", token }),
+
+  // ── Catálogo de servicios ─────────────────────────────────────
+  // Lectura: doctor y secretaria (ella los necesita para facturar).
+  // Escritura: solo el doctor (los precios son configuración del negocio).
+  getServices: (token: string, includeInactive = false) =>
+    api<ServiceItem[]>(
+      `/dashboard/services${includeInactive ? "?includeInactive=true" : ""}`,
+      { token },
+    ),
+
+  createService: (
+    data: {
+      name: string;
+      price: number;
+      description?: string;
+      category?: string;
+      sortOrder?: number;
+    },
+    token: string,
+  ) =>
+    api<ServiceItem>("/dashboard/services", {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  updateService: (
+    id: string,
+    data: {
+      name?: string;
+      price?: number;
+      description?: string;
+      category?: string;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+    token: string,
+  ) =>
+    api<ServiceItem>(`/dashboard/services/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+      token,
+    }),
+
+  deleteService: (id: string, token: string) =>
+    api<ServiceItem>(`/dashboard/services/${id}`, { method: "DELETE", token }),
+
+  // Reemplaza TODAS las tarifas del servicio. Las ARS que no vengan en la
+  // lista quedan sin tarifa, es decir, las paga completas el paciente.
+  setServiceInsurances: (
+    id: string,
+    tariffs: Array<{
+      insuranceId: string;
+      patientCopay?: number | null;
+      insuranceCoverage?: number | null;
+    }>,
+    token: string,
+  ) =>
+    api<ServiceItem>(`/dashboard/services/${id}/insurances`, {
+      method: "PUT",
+      body: JSON.stringify({ tariffs }),
+      token,
+    }),
 
   // ── Paciente: datos básicos NO clínicos (secretaria + doctor) ─
   getPatientBasic: (id: string, token: string) =>

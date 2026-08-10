@@ -14,6 +14,7 @@ import {
   LogOut,
   Activity,
   Banknote,
+  ClipboardList,
 } from "lucide-react";
 
 type NavVisibility = true | false | "schedule";
@@ -28,6 +29,7 @@ const ALL_NAV_ITEMS: {
   { href: "/dashboard/caja", label: "Caja", icon: Banknote, secretary: true },
   { href: "/dashboard/pacientes", label: "Pacientes", icon: Users, secretary: true },
   { href: "/dashboard/horarios", label: "Horarios", icon: Clock, secretary: "schedule" },
+  { href: "/dashboard/servicios", label: "Servicios", icon: ClipboardList, secretary: false },
   { href: "/dashboard/perfil", label: "Mi perfil", icon: UserCircle, secretary: false },
   { href: "/dashboard/configuracion", label: "Configuracion", icon: Settings, secretary: false },
 ];
@@ -38,7 +40,9 @@ function secretaryCanAccess(pathname: string, canManageSchedule: boolean): boole
   if (pathname.startsWith("/dashboard/caja")) return true;
   if (pathname.startsWith("/dashboard/pacientes")) return true;
   if (pathname.startsWith("/dashboard/horarios")) return canManageSchedule;
-  // /dashboard/agenda/[id] (clínico), /perfil, /configuracion → bloqueado
+  // /dashboard/agenda/[id] (clínico), /servicios (precios), /perfil,
+  // /configuracion → bloqueado. La secretaria lee el catálogo al facturar,
+  // pero no lo edita.
   return false;
 }
 

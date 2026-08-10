@@ -92,19 +92,20 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  doctorProfile       DoctorProfile?
-  users               User[]
-  schedules           Schedule[]
-  scheduleOverrides   ScheduleOverride[]
-  appointments        Appointment[]
-  tenantPatients      TenantPatient[]
-  notifications       Notification[]
-  reviews             Review[]
-  officeConfig        OfficeConfig?
-  subscription        Subscription?
-  consultationMetrics DoctorConsultationMetric[]
-  smartReminders      SmartReminder[]
+  doctorProfile        DoctorProfile?
+  users                User[]
+  schedules            Schedule[]
+  scheduleOverrides    ScheduleOverride[]
+  appointments         Appointment[]
+  tenantPatients       TenantPatient[]
+  notifications        Notification[]
+  reviews              Review[]
+  officeConfig         OfficeConfig?
+  subscription         Subscription?
+  consultationMetrics  DoctorConsultationMetric[]
+  smartReminders       SmartReminder[]
   consultationPayments ConsultationPayment[]
+  services             Service[]
 
   @@map("tenants")
 }
@@ -173,9 +174,54 @@ model Insurance {
   doctors        DoctorInsurance[]
   payments       ConsultationPayment[]
   tenantPatients TenantPatient[]
+  services       ServiceInsurance[]
 
   @@index([isActive, sortOrder])
   @@map("insurances")
+}
+
+/// Catálogo de servicios del doctor (curación, sutura, electrocardiograma…).
+/// `price` es el precio de lista: lo que paga quien viene sin seguro.
+model Service {
+  id       String @id @default(cuid())
+  tenantId String @map("tenant_id")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  name        String  @db.VarChar(150)
+  description String? @db.Text
+  price       Float
+  currency    String  @default("DOP") @db.VarChar(3)
+  category    String? @db.VarChar(80)
+  isActive    Boolean @default(true) @map("is_active")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  insurances ServiceInsurance[]
+
+  @@index([tenantId, isActive, sortOrder])
+  @@map("services")
+}
+
+/// Tarifa pactada de un servicio con una ARS. Espejo de DoctorInsurance,
+/// que es como ya se maneja la tarifa de la consulta.
+/// Si no existe fila para una ARS, ese servicio no está cubierto por ella
+/// y lo paga completo el paciente al precio de lista.
+model ServiceInsurance {
+  serviceId   String    @map("service_id")
+  insuranceId String    @map("insurance_id")
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  insurance   Insurance @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+
+  patientCopay      Float? @map("patient_copay") // efectivo que pone el paciente
+  insuranceCoverage Float? @map("insurance_coverage") // aporte de la ARS
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([serviceId, insuranceId])
+  @@index([insuranceId])
+  @@map("service_insurances")
 }
 
 /// Many-to-many: qué seguros acepta cada doctor + tarifa pactada por ARS
@@ -186,10 +232,10 @@ model DoctorInsurance {
   insurance       Insurance     @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
 
   // Tarifa pactada con esta ARS (la define el doctor en su configuración).
-  patientCopay      Float? @map("patient_copay")      // efectivo que paga el paciente
+  patientCopay      Float? @map("patient_copay") // efectivo que paga el paciente
   insuranceCoverage Float? @map("insurance_coverage") // monto que aporta la ARS
 
-  createdAt       DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@id([doctorProfileId, insuranceId])
   @@index([insuranceId])
@@ -273,15 +319,15 @@ model TenantPatient {
   insuranceRef    Insurance? @relation(fields: [insuranceId], references: [id])
   affiliateNumber String?    @map("affiliate_number") @db.VarChar(60) // nº de afiliado / contrato
 
-  isVip     Boolean @default(false) @map("is_vip")
+  isVip Boolean @default(false) @map("is_vip")
 
   // Antecedentes médicos (texto libre — Plan Pro)
-  bloodType            String? @map("blood_type") @db.VarChar(5) // A+, O-, etc.
-  allergies            String? @db.Text
-  chronicConditions    String? @map("chronic_conditions") @db.Text
-  currentMedications   String? @map("current_medications") @db.Text
-  surgeries            String? @db.Text
-  familyHistory        String? @map("family_history") @db.Text
+  bloodType          String? @map("blood_type") @db.VarChar(5) // A+, O-, etc.
+  allergies          String? @db.Text
+  chronicConditions  String? @map("chronic_conditions") @db.Text
+  currentMedications String? @map("current_medications") @db.Text
+  surgeries          String? @db.Text
+  familyHistory      String? @map("family_history") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -309,7 +355,7 @@ model Schedule {
   isActive        Boolean @default(true) @map("is_active")
 
   // Cupos máximos del día (null = sin tope). Lo declara el doctor.
-  maxAppointments Int?    @map("max_appointments")
+  maxAppointments Int? @map("max_appointments")
 
   @@unique([tenantId, dayOfWeek])
   @@map("schedules")
@@ -665,11 +711,11 @@ model ConsultationPayment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
-  tenant      Tenant      @relation(fields: [tenantId], references: [id])
-  patient     Patient     @relation(fields: [patientId], references: [id])
-  insurance   Insurance?  @relation(fields: [insuranceId], references: [id])
-  registeredBy User?      @relation(fields: [registeredById], references: [id])
+  appointment  Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  tenant       Tenant      @relation(fields: [tenantId], references: [id])
+  patient      Patient     @relation(fields: [patientId], references: [id])
+  insurance    Insurance?  @relation(fields: [insuranceId], references: [id])
+  registeredBy User?       @relation(fields: [registeredById], references: [id])
 
   @@index([tenantId, createdAt])
   @@index([insuranceId])

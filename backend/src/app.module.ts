@@ -14,6 +14,7 @@ import { SmartRemindersModule } from './modules/smart-reminders/smart-reminders.
 import { MedicalRecordsModule } from './modules/medical-records/medical-records.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { StaffModule } from './modules/staff/staff.module';
+import { ServicesModule } from './modules/services/services.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -33,6 +34,7 @@ import { AppController } from './app.controller';
     MedicalRecordsModule,
     PaymentsModule,
     StaffModule,
+    ServicesModule,
   ],
   controllers: [AppController],
 })
