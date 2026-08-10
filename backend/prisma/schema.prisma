@@ -199,6 +199,7 @@ model Service {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   insurances ServiceInsurance[]
+  items      PaymentItem[]
 
   @@index([tenantId, isActive, sortOrder])
   @@map("services")
@@ -717,9 +718,48 @@ model ConsultationPayment {
   insurance    Insurance?  @relation(fields: [insuranceId], references: [id])
   registeredBy User?       @relation(fields: [registeredById], references: [id])
 
+  /// Líneas de la factura. fee/cashAmount/insuranceAmount de arriba son la
+  /// SUMA de estas líneas, recalculada por el servidor en cada guardado.
+  items PaymentItem[]
+
   @@index([tenantId, createdAt])
   @@index([insuranceId])
   @@map("consultation_payments")
+}
+
+enum PaymentItemKind {
+  CONSULTATION // la consulta en sí
+  SERVICE // servicio tomado del catálogo
+  OTHER // línea escrita a mano
+}
+
+/// Una línea de la factura. `description` y `unitPrice` son un SNAPSHOT:
+/// se congelan al facturar para que cambiar el precio del catálogo no
+/// altere las facturas ya emitidas, y para poder desactivar un servicio
+/// sin romper el histórico. `serviceId` queda solo como referencia de origen.
+model PaymentItem {
+  id        String              @id @default(cuid())
+  paymentId String              @map("payment_id")
+  payment   ConsultationPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  kind      PaymentItemKind @default(SERVICE)
+  serviceId String?         @map("service_id")
+  service   Service?        @relation(fields: [serviceId], references: [id])
+
+  description String @db.VarChar(200)
+  unitPrice   Float  @map("unit_price")
+  quantity    Int    @default(1)
+
+  // Reparto de esta línea entre el paciente y la ARS.
+  cashAmount      Float @default(0) @map("cash_amount")
+  insuranceAmount Float @default(0) @map("insurance_amount")
+
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([paymentId])
+  @@index([serviceId])
+  @@map("payment_items")
 }
 
 /// Sistema inteligente de recordatorios (Smart Reminders)

@@ -459,6 +459,18 @@ export const dashboard = {
         patientCopay: number | null;
         insuranceCoverage: number | null;
       }>;
+      /** Catálogo activo con la tarifa pactada de cada servicio por ARS. */
+      services: Array<{
+        id: string;
+        name: string;
+        price: number;
+        category: string | null;
+        insurances: Array<{
+          insuranceId: string;
+          patientCopay: number | null;
+          insuranceCoverage: number | null;
+        }>;
+      }>;
       payment: {
         id: string;
         fee: number;
@@ -467,12 +479,33 @@ export const dashboard = {
         insuranceAmount: number;
         isCourtesy: boolean;
         notes: string | null;
+        items: Array<{
+          id: string;
+          kind: "CONSULTATION" | "SERVICE" | "OTHER";
+          serviceId: string | null;
+          description: string;
+          unitPrice: number;
+          quantity: number;
+          cashAmount: number;
+          insuranceAmount: number;
+          sortOrder: number;
+        }>;
       } | null;
     }>(`/dashboard/appointments/${appointmentId}/payment`, { token }),
 
   registerPayment: (
     appointmentId: string,
     data: {
+      /** Líneas de la factura. Si vienen, el servidor calcula los totales con ellas. */
+      items?: Array<{
+        kind: "CONSULTATION" | "SERVICE" | "OTHER";
+        serviceId?: string | null;
+        description: string;
+        unitPrice: number;
+        quantity?: number;
+        cashAmount: number;
+        insuranceAmount?: number;
+      }>;
       fee?: number;
       cashAmount?: number;
       insuranceId?: string | null;
@@ -495,6 +528,8 @@ export const dashboard = {
       cashTotal: number;
       insuranceTotal: number;
       total: number;
+      consultationsTotal: number;
+      servicesTotal: number;
       paidCount: number;
       courtesyCount: number;
       pendingCount: number;
