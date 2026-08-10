@@ -5,15 +5,17 @@ import {
   Put,
   Param,
   Body,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TenantGuard } from '../../common/guards/tenant.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { AppointmentsService } from './appointments.service';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { AppointmentReasonEnum } from './dto/book-appointment.dto';
+import { ConfirmDayDto, MarkNotifiedDto, ReorderQueueDto } from './dto/queue.dto';
 
 @ApiTags('Dashboard - Appointments')
 @ApiBearerAuth()
@@ -26,6 +28,41 @@ export class AppointmentsController {
   @ApiOperation({ summary: "Get today's appointments for the logged-in doctor" })
   async getToday(@CurrentTenant() tenantId: string) {
     return this.appointmentsService.getTodayAppointments(tenantId);
+  }
+
+  @Get('by-date')
+  @ApiOperation({
+    summary: 'Agenda de un día cualquiera (para preparar días futuros)',
+  })
+  @ApiQuery({ name: 'date', required: false, description: 'YYYY-MM-DD (default: hoy)' })
+  async getByDate(@CurrentTenant() tenantId: string, @Query('date') date?: string) {
+    return this.appointmentsService.getAppointmentsByDate(tenantId, date);
+  }
+
+  @Put('reorder')
+  @ApiOperation({ summary: 'Reordenar los turnos del día (asigna 1..N)' })
+  async reorder(@CurrentTenant() tenantId: string, @Body() dto: ReorderQueueDto) {
+    return this.appointmentsService.reorderQueue(tenantId, dto.date, dto.orderedIds);
+  }
+
+  @Post('confirm-day')
+  @ApiOperation({
+    summary:
+      'Confirmar el día: pasa las pendientes a confirmadas y numera las que no tengan turno. ' +
+      'Respeta los números ya asignados.',
+  })
+  async confirmDay(@CurrentTenant() tenantId: string, @Body() dto: ConfirmDayDto) {
+    return this.appointmentsService.confirmDay(tenantId, dto.date);
+  }
+
+  @Post(':id/notified')
+  @ApiOperation({ summary: 'Registrar que se le avisó el turno al paciente por WhatsApp' })
+  async markNotified(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+    @Body() dto: MarkNotifiedDto,
+  ) {
+    return this.appointmentsService.markNotified(tenantId, id, dto.content);
   }
 
   @Put(':id/status')

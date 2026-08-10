@@ -207,12 +207,24 @@ export default function CitaPage() {
             </div>
           </div>
 
-          {appointment.queuePosition != null && (
+          {/* Sin numero = el consultorio todavia no ha confirmado ni avisado. */}
+          {appointment.queuePosition != null ? (
             <div className="flex items-start gap-3">
               <span className="w-4 h-4 mt-0.5 shrink-0 text-teal font-bold text-base leading-4">#</span>
               <div>
                 <p className="text-xs text-gray-500">Tu turno</p>
                 <p className="text-lg font-bold text-teal">#{appointment.queuePosition}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3">
+              <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" strokeWidth={1.5} />
+              <div>
+                <p className="text-xs text-gray-500">Tu turno</p>
+                <p className="text-sm font-medium text-amber-700">Pendiente de confirmacion</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  El consultorio confirmara tu cita y te enviara tu numero por WhatsApp.
+                </p>
               </div>
             </div>
           )}

@@ -15,6 +15,7 @@ import {
   Activity,
   Banknote,
   ClipboardList,
+  ListOrdered,
 } from "lucide-react";
 
 type NavVisibility = true | false | "schedule";
@@ -26,6 +27,7 @@ const ALL_NAV_ITEMS: {
   secretary: NavVisibility;
 }[] = [
   { href: "/dashboard", label: "Agenda del dia", icon: Calendar, secretary: true },
+  { href: "/dashboard/turnos", label: "Turnos", icon: ListOrdered, secretary: true },
   { href: "/dashboard/caja", label: "Caja", icon: Banknote, secretary: true },
   { href: "/dashboard/pacientes", label: "Pacientes", icon: Users, secretary: true },
   { href: "/dashboard/horarios", label: "Horarios", icon: Clock, secretary: "schedule" },
@@ -37,6 +39,7 @@ const ALL_NAV_ITEMS: {
 /** Rutas que la secretaria PUEDE abrir (todo lo demás se redirige a /dashboard). */
 function secretaryCanAccess(pathname: string, canManageSchedule: boolean): boolean {
   if (pathname === "/dashboard") return true; // agenda del día (lista)
+  if (pathname.startsWith("/dashboard/turnos")) return true;
   if (pathname.startsWith("/dashboard/caja")) return true;
   if (pathname.startsWith("/dashboard/pacientes")) return true;
   if (pathname.startsWith("/dashboard/horarios")) return canManageSchedule;

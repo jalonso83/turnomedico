@@ -4,6 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { AppointmentStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { BookAppointmentDto } from './dto/book-appointment.dto';
 import { UpdateStatusDto, AppointmentStatusEnum } from './dto/update-status.dto';
@@ -31,7 +32,18 @@ export class AppointmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getTodayAppointments(tenantId: string) {
-    const today = this.getTodayDR();
+    return this.getAppointmentsByDate(tenantId);
+  }
+
+  /**
+   * Agenda de un día cualquiera. Sin `dateStr` devuelve la de hoy.
+   * La secretaria necesita poder abrir días futuros para prepararlos.
+   */
+  async getAppointmentsByDate(tenantId: string, dateStr?: string) {
+    if (dateStr && !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
+    }
+    const today = dateStr ? dateOnlyUTC(dateStr) : this.getTodayDR();
 
     const appointments = await this.prisma.appointment.findMany({
       where: {
@@ -44,6 +56,13 @@ export class AppointmentsService {
         },
         payment: {
           select: { cashAmount: true, insuranceAmount: true, isCourtesy: true },
+        },
+        // Para saber a quién ya se le avisó su turno por WhatsApp.
+        notifications: {
+          where: { type: 'CONFIRMATION' },
+          select: { sentAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -65,14 +84,16 @@ export class AppointmentsService {
       const pb = priorityOrder[b.status] ?? 99;
       if (pa !== pb) return pa - pb;
 
-      // Within same priority group, sort by queuePosition then startTime
-      if (a.status === 'ARRIVED' || a.status === 'IN_PROGRESS') {
-        return (a.queuePosition ?? 999) - (b.queuePosition ?? 999);
-      }
-      // queuePosition es el orden natural en el nuevo modelo; startTime es fallback legacy
-      const qa = a.queuePosition ?? 999;
-      const qb = b.queuePosition ?? 999;
+      // Dentro del mismo grupo manda el número de turno.
+      // Las citas SIN turno (aún no confirmadas por la secretaria) van al
+      // final, ordenadas por cuándo entró la reserva. Antes usaban 999 como
+      // relleno y quedaban todas empatadas, en orden indefinido.
+      const qa = a.queuePosition ?? Number.MAX_SAFE_INTEGER;
+      const qb = b.queuePosition ?? Number.MAX_SAFE_INTEGER;
       if (qa !== qb) return qa - qb;
+      if (a.queuePosition == null && b.queuePosition == null) {
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      }
       return (a.startTime ?? '').localeCompare(b.startTime ?? '');
     });
 
@@ -108,6 +129,8 @@ export class AppointmentsService {
       type: a.type,
       reason: a.reason,
       queuePosition: a.queuePosition,
+      /** Cuándo se le avisó su turno. null = todavía no se le ha avisado. */
+      notifiedAt: a.notifications[0]?.sentAt ?? null,
       notes: a.notes,
       patient: a.patient,
       payment: a.payment
@@ -126,6 +149,152 @@ export class AppointmentsService {
       data: { appointments: data, stats },
       message: 'Agenda del día',
     };
+  }
+
+  /** Estados que ya no cuentan para el turno del día. */
+  private readonly DEAD_STATUSES: AppointmentStatus[] = [
+    'CANCELLED_PATIENT',
+    'CANCELLED_DOCTOR',
+    'NO_SHOW',
+  ];
+
+  /**
+   * Reordena los turnos de un día. Recibe los ids en el orden deseado y les
+   * asigna 1..N. Solo se pueden mover citas que aún no han llegado: si el
+   * paciente ya está en el consultorio, su turno está en curso.
+   */
+  async reorderQueue(tenantId: string, dateStr: string, orderedIds: string[]) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
+    }
+    const date = dateOnlyUTC(dateStr);
+
+    const delDia = await this.prisma.appointment.findMany({
+      where: { tenantId, date, status: { notIn: this.DEAD_STATUSES } },
+      select: { id: true, status: true, queuePosition: true },
+    });
+
+    const validos = new Set(delDia.map((a) => a.id));
+    for (const id of orderedIds) {
+      if (!validos.has(id)) {
+        throw new BadRequestException('Hay una cita que no es de este día o no existe');
+      }
+    }
+    if (new Set(orderedIds).size !== orderedIds.length) {
+      throw new BadRequestException('Hay una cita repetida en el orden');
+    }
+
+    const enCurso = delDia.filter(
+      (a) => a.status === 'ARRIVED' || a.status === 'IN_PROGRESS' || a.status === 'COMPLETED',
+    );
+    const moviendoEnCurso = enCurso.filter((a) => {
+      const idx = orderedIds.indexOf(a.id);
+      return idx >= 0 && a.queuePosition != null && a.queuePosition !== idx + 1;
+    });
+    if (moviendoEnCurso.length > 0) {
+      throw new BadRequestException(
+        'No se puede cambiar el turno de un paciente que ya llegó o fue atendido',
+      );
+    }
+
+    await this.prisma.$transaction(
+      orderedIds.map((id, idx) =>
+        this.prisma.appointment.update({
+          where: { id },
+          data: { queuePosition: idx + 1 },
+        }),
+      ),
+    );
+
+    return this.getAppointmentsByDate(tenantId, dateStr);
+  }
+
+  /**
+   * Confirma el día y numera los turnos.
+   *
+   * Regla clave: a quien YA tiene número no se le toca. Si durante el día
+   * entran reservas nuevas y la secretaria vuelve a pulsar el botón, no se
+   * puede renumerar a alguien a quien ya le dijeron por WhatsApp "eres el 3ro".
+   * Las nuevas se numeran a continuación, por orden de llegada de la reserva.
+   */
+  async confirmDay(tenantId: string, dateStr: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
+    }
+    const date = dateOnlyUTC(dateStr);
+
+    const citas = await this.prisma.appointment.findMany({
+      where: { tenantId, date, status: { notIn: this.DEAD_STATUSES } },
+      select: { id: true, status: true, queuePosition: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (citas.length === 0) {
+      throw new BadRequestException('No hay citas para ese día');
+    }
+
+    let maxQueue = citas.reduce((m, c) => Math.max(m, c.queuePosition ?? 0), 0);
+    const sinTurno = citas.filter((c) => c.queuePosition == null);
+    const porConfirmar = citas.filter((c) => c.status === 'PENDING');
+
+    await this.prisma.$transaction([
+      ...sinTurno.map((c) =>
+        this.prisma.appointment.update({
+          where: { id: c.id },
+          data: { queuePosition: ++maxQueue },
+        }),
+      ),
+      ...porConfirmar.map((c) =>
+        this.prisma.appointment.update({
+          where: { id: c.id },
+          data: { status: 'CONFIRMED' },
+        }),
+      ),
+    ]);
+
+    return {
+      data: {
+        date: dateStr,
+        numeradas: sinTurno.length,
+        confirmadas: porConfirmar.length,
+      },
+      message: 'Día confirmado',
+    };
+  }
+
+  /**
+   * Deja constancia de que se le avisó al paciente.
+   * Se guarda en el modelo Notification, que ya existía sin usarse.
+   */
+  async markNotified(tenantId: string, appointmentId: string, content: string) {
+    const cita = await this.prisma.appointment.findFirst({
+      where: { id: appointmentId, tenantId },
+      select: { id: true, patientId: true, queuePosition: true },
+    });
+    if (!cita) {
+      throw new NotFoundException('Cita no encontrada');
+    }
+    if (cita.queuePosition == null) {
+      throw new BadRequestException(
+        'Esta cita todavía no tiene turno asignado: confirma el día primero',
+      );
+    }
+
+    const notif = await this.prisma.notification.create({
+      data: {
+        tenantId,
+        appointmentId: cita.id,
+        patientId: cita.patientId,
+        type: 'CONFIRMATION',
+        channel: 'WHATSAPP',
+        status: 'SENT',
+        sentAt: new Date(),
+        content,
+      },
+      select: { id: true, sentAt: true },
+    });
+
+    return { data: notif, message: 'Aviso registrado' };
   }
 
   async updateStatus(appointmentId: string, dto: UpdateStatusDto, tenantId: string) {
@@ -157,16 +326,23 @@ export class AppointmentsService {
     switch (dto.status) {
       case AppointmentStatusEnum.ARRIVED: {
         updateData.arrivedAt = now;
-        // Assign next queue position for today
-        const maxQueue = await this.prisma.appointment.aggregate({
-          where: {
-            tenantId,
-            date: appointment.date,
-            queuePosition: { not: null },
-          },
-          _max: { queuePosition: true },
-        });
-        updateData.queuePosition = (maxQueue._max.queuePosition ?? 0) + 1;
+        // Solo se asigna turno si NO tiene.
+        // Antes se reasignaba siempre, así que el número que el paciente
+        // había recibido al reservar cambiaba al llegar: quien reservó de
+        // tercero y llegaba último terminaba con el número más alto.
+        // Si la secretaria ya ordenó el día y avisó por WhatsApp, ese
+        // número no se puede mover.
+        if (appointment.queuePosition == null) {
+          const maxQueue = await this.prisma.appointment.aggregate({
+            where: {
+              tenantId,
+              date: appointment.date,
+              queuePosition: { not: null },
+            },
+            _max: { queuePosition: true },
+          });
+          updateData.queuePosition = (maxQueue._max.queuePosition ?? 0) + 1;
+        }
         break;
       }
       case AppointmentStatusEnum.IN_PROGRESS:
@@ -353,17 +529,11 @@ export class AppointmentsService {
         select: { queuePosition: true },
       });
 
-      // Validar tope de cupos
+      // Validar tope de cupos. Cuenta FILAS, no números de turno, así que
+      // sigue funcionando aunque las reservas ya no traigan turno asignado.
       if (schedule.maxAppointments != null && activeAppointments.length >= schedule.maxAppointments) {
         throw new ConflictException('Ya no quedan cupos para ese día');
       }
-
-      // Próximo número de turno (1-based, secuencial por día)
-      const maxQueue = activeAppointments.reduce(
-        (max, a) => (a.queuePosition != null && a.queuePosition > max ? a.queuePosition : max),
-        0,
-      );
-      const queuePosition = maxQueue + 1;
 
       // Find or create patient
       let patient = await tx.patient.findUnique({
@@ -391,6 +561,10 @@ export class AppointmentsService {
       // Compatibilidad: si el cliente envió startTime, lo guardamos como dato extra.
       const startTime = dto.startTime ?? null;
 
+      // La reserva NO asigna turno ni confirma.
+      // El número lo pone la secretaria cuando ordena el día, y en ese mismo
+      // acto le avisa al paciente. `queuePosition == null` es justamente la
+      // señal de "todavía no se le avisó", así que no hace falta otro campo.
       const appointment = await tx.appointment.create({
         data: {
           tenantId,
@@ -398,8 +572,8 @@ export class AppointmentsService {
           date,
           startTime,
           endTime: null,
-          queuePosition,
-          status: 'CONFIRMED',
+          queuePosition: null,
+          status: 'PENDING',
           type: 'FIRST_VISIT',
           reason: dto.reason,
         },
@@ -412,14 +586,14 @@ export class AppointmentsService {
       data: {
         appointmentId: result.appointment.id,
         date: result.appointment.date,
-        queuePosition: result.appointment.queuePosition,
+        queuePosition: null,
         doctorStartTime: override?.startTime ?? schedule.startTime,
         status: result.appointment.status,
         reason: result.appointment.reason,
         doctorName: tenant.users[0]?.name ?? tenant.name,
         consultorioName: tenant.doctorProfile.consultorioName,
       },
-      message: 'Turno reservado exitosamente',
+      message: 'Solicitud recibida. El consultorio la confirmará y te enviará tu turno.',
     };
   }
 

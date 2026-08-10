@@ -120,6 +120,21 @@ export const publicApi = {
 };
 
 // ── Dashboard endpoints (require auth) ─────────────────────────
+/** Cita tal como la devuelve la agenda del dashboard. */
+export interface AgendaAppointment {
+  id: string;
+  date: string;
+  startTime: string | null;
+  status: string;
+  reason: string;
+  /** null = la secretaria todavía no le ha asignado turno ni le ha avisado. */
+  queuePosition: number | null;
+  /** null = todavía no se le ha avisado por WhatsApp. */
+  notifiedAt: string | null;
+  notes: string | null;
+  patient: { id: string; name: string; phone: string };
+}
+
 /** Tarifa pactada de un servicio con una ARS. */
 export interface ServiceInsuranceTariff {
   insuranceId: string;
@@ -170,6 +185,34 @@ export const dashboard = {
   // ── Appointments ──────────────────────────────────────────
   getTodayAgenda: (token: string) =>
     api("/dashboard/appointments/today", { token }),
+
+  /** Agenda de cualquier día. Sirve para preparar días futuros. */
+  getAgendaByDate: (date: string, token: string) =>
+    api<{
+      appointments: AgendaAppointment[];
+      stats: Record<string, number>;
+    }>(`/dashboard/appointments/by-date?date=${date}`, { token }),
+
+  /** Asigna queuePosition 1..N en el orden recibido. */
+  reorderQueue: (date: string, orderedIds: string[], token: string) =>
+    api<{ appointments: AgendaAppointment[]; stats: Record<string, number> }>(
+      "/dashboard/appointments/reorder",
+      { method: "PUT", body: JSON.stringify({ date, orderedIds }), token },
+    ),
+
+  /** Confirma las pendientes y numera las que no tengan turno. */
+  confirmDay: (date: string, token: string) =>
+    api<{ date: string; numeradas: number; confirmadas: number }>(
+      "/dashboard/appointments/confirm-day",
+      { method: "POST", body: JSON.stringify({ date }), token },
+    ),
+
+  /** Deja constancia de que se le avisó el turno al paciente. */
+  markNotified: (appointmentId: string, content: string, token: string) =>
+    api<{ id: string; sentAt: string }>(
+      `/dashboard/appointments/${appointmentId}/notified`,
+      { method: "POST", body: JSON.stringify({ content }), token },
+    ),
 
   updateAppointmentStatus: (id: string, status: string, token: string) =>
     api(`/dashboard/appointments/${id}/status`, {

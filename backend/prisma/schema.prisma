@@ -61,6 +61,7 @@ enum NotificationChannel {
   EMAIL
   PUSH
   IN_APP
+  WHATSAPP
 }
 
 enum NotificationStatus {

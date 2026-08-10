@@ -348,15 +348,17 @@ export default function DoctorProfilePage() {
                 )}
               </div>
             </div>
-            {confirmation.queuePosition != null && (
-              <div className="flex items-start gap-3">
-                <span className="w-4 h-4 mt-0.5 shrink-0 text-teal font-bold text-base leading-4">#</span>
-                <div>
-                  <p className="text-xs text-gray-500">Tu turno</p>
-                  <p className="text-lg font-bold text-teal">#{confirmation.queuePosition}</p>
-                </div>
+            {/* El turno ya NO se muestra al reservar. Lo asigna el consultorio
+                cuando ordena el dia, y en ese momento le avisa al paciente. */}
+            <div className="flex items-start gap-3">
+              <Info className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
+              <div>
+                <p className="text-xs text-gray-500">Tu turno</p>
+                <p className="text-sm text-gray-700">
+                  El consultorio confirmara tu cita y te enviara tu numero por WhatsApp.
+                </p>
               </div>
-            )}
+            </div>
             <div className="flex items-start gap-3">
               {confirmation.reason === "RESULTS_DELIVERY" ? (
                 <FileText className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
@@ -661,7 +663,7 @@ export default function DoctorProfilePage() {
                   <div className="flex items-start gap-3 pl-8">
                     <Info className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" strokeWidth={1.5} />
                     <p className="text-xs text-gray-600">
-                      Se atiende por orden de turno (no por hora). Al confirmar, te asignaremos un número.
+                      Se atiende por orden de turno (no por hora). El consultorio confirma tu cita y te envia tu numero por WhatsApp.
                     </p>
                   </div>
                   {!showForm && (
