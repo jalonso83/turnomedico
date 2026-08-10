@@ -150,7 +150,6 @@ export class PatientsService {
         date: true,
         startTime: true,
         status: true,
-        type: true,
         notes: true,
       },
     });
@@ -269,7 +268,6 @@ export class PatientsService {
       date: a.date,
       status: a.status,
       reason: a.reason,
-      type: a.type,
       diagnosis: a.consultationNote?.assessment ?? null,
       reasonText: a.consultationNote?.subjective ?? null,
       plan: a.consultationNote?.plan ?? null,
@@ -329,7 +327,6 @@ export class PatientsService {
         date: true,
         startTime: true,
         status: true,
-        type: true,
         notes: true,
       },
     });

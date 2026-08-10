@@ -28,15 +28,6 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
-/// OBSOLETO: reemplazado por AppointmentReason.FOLLOW_UP.
-/// La columna sigue en la BD solo para no romper el backend desplegado
-/// mientras sale este cambio. Se elimina en cuanto el deploy este vivo.
-enum AppointmentType {
-  FIRST_VISIT
-  FOLLOW_UP
-  EMERGENCY
-}
-
 /// Motivo de la cita. Una sola etiqueta con tres opciones.
 /// FOLLOW_UP lo asigna el doctor o la secretaria desde el dashboard:
 /// NO se ofrece en la reserva publica, porque el seguimiento dentro de la
@@ -414,8 +405,6 @@ model Appointment {
   endTime   String?  @map("end_time") @db.VarChar(5) // HH:MM
 
   status        AppointmentStatus @default(PENDING)
-  /// OBSOLETO: no se lee ni se escribe. Pendiente de eliminar (ver enum).
-  type          AppointmentType   @default(FIRST_VISIT)
   reason        AppointmentReason @default(CONSULTATION)
   queuePosition Int?              @map("queue_position")
 
