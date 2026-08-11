@@ -88,17 +88,41 @@ export default function TurnosPage() {
       .catch(() => {});
   }, []);
 
-  const mover = (idx: number, dir: -1 | 1) => {
-    const destino = idx + dir;
-    if (destino < 0 || destino >= citas.length) return;
-    if (EN_CURSO.includes(citas[idx].status) || EN_CURSO.includes(citas[destino].status)) {
+  const mover = (idx: number, dir: -1 | 1) => moverA(idx, idx + dir);
+
+  /**
+   * Lleva la cita de `idx` a la posición `destino` y recorre las demás.
+   * Es lo que usan tanto las flechas como la casilla editable.
+   */
+  const moverA = (idx: number, destino: number) => {
+    if (destino < 0 || destino >= citas.length || destino === idx) return;
+    if (EN_CURSO.includes(citas[idx].status)) {
       setError("No se puede mover a un paciente que ya llegó");
       return;
     }
+    // Tampoco se puede saltar por encima de alguien que ya está siendo
+    // atendido: su turno está en curso.
+    const rango = citas.slice(Math.min(idx, destino), Math.max(idx, destino) + 1);
+    if (rango.some((c, i) => (i !== (idx < destino ? 0 : rango.length - 1)) && EN_CURSO.includes(c.status))) {
+      setError("Hay un paciente que ya llegó en el medio: no se puede reordenar por encima de él");
+      return;
+    }
     const copia = [...citas];
-    [copia[idx], copia[destino]] = [copia[destino], copia[idx]];
+    const [movida] = copia.splice(idx, 1);
+    copia.splice(destino, 0, movida);
     setCitas(copia);
     setError("");
+  };
+
+  /** Lo que la secretaria está escribiendo en la casilla de una fila. */
+  const [editandoPos, setEditandoPos] = useState<{ id: string; valor: string } | null>(null);
+
+  const confirmarPosicion = (idx: number) => {
+    if (!editandoPos) return;
+    const n = parseInt(editandoPos.valor, 10);
+    setEditandoPos(null);
+    if (Number.isNaN(n)) return;
+    moverA(idx, Math.min(Math.max(1, n), citas.length) - 1);
   };
 
   const guardarOrden = async () => {
@@ -236,6 +260,11 @@ export default function TurnosPage() {
             )}
           </div>
 
+          <p className="text-xs text-gray-500 mb-2">
+            El orden que ves es solo una sugerencia, por hora de reserva. Escribe la posición en
+            la casilla del número, o usa las flechas, y luego confirma.
+          </p>
+
           <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden mb-4">
             {citas.map((c, idx) => {
               const bloqueada = EN_CURSO.includes(c.status);
@@ -244,16 +273,40 @@ export default function TurnosPage() {
                   key={c.id}
                   className={`px-3 py-2.5 flex items-center gap-3 ${bloqueada ? "bg-gray-50" : ""}`}
                 >
-                  {/* Número */}
-                  <span
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 ${
-                      c.queuePosition != null
-                        ? "bg-teal/10 text-teal"
-                        : "bg-gray-100 text-gray-400"
-                    }`}
-                  >
-                    {c.queuePosition ?? "—"}
-                  </span>
+                  {/* Número: se puede escribir directo para mover la cita ahí */}
+                  {bloqueada ? (
+                    <span
+                      className="w-11 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 bg-gray-100 text-gray-400"
+                      title="Ya llegó: su turno no se puede cambiar"
+                    >
+                      {c.queuePosition ?? "—"}
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      min={1}
+                      max={citas.length}
+                      value={
+                        editandoPos?.id === c.id
+                          ? editandoPos.valor
+                          : c.queuePosition != null
+                            ? String(c.queuePosition)
+                            : String(idx + 1)
+                      }
+                      onChange={(e) => setEditandoPos({ id: c.id, valor: e.target.value })}
+                      onBlur={() => confirmarPosicion(idx)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        if (e.key === "Escape") setEditandoPos(null);
+                      }}
+                      title="Escribe la posición y presiona Enter"
+                      className={`w-11 h-9 rounded-lg text-center text-sm font-bold shrink-0 border outline-none focus:ring-2 focus:ring-teal ${
+                        c.queuePosition != null
+                          ? "bg-teal/10 text-teal border-teal/30"
+                          : "bg-white text-gray-500 border-gray-300"
+                      }`}
+                    />
+                  )}
 
                   {/* Paciente */}
                   <div className="flex-1 min-w-0">
@@ -288,19 +341,21 @@ export default function TurnosPage() {
                     </button>
                   )}
 
-                  {/* Mover */}
-                  <div className="flex flex-col shrink-0">
+                  {/* Subir / bajar una posición */}
+                  <div className="flex flex-col shrink-0 border border-gray-200 rounded-lg overflow-hidden">
                     <button
                       onClick={() => mover(idx, -1)}
                       disabled={idx === 0 || bloqueada}
-                      className="p-0.5 text-gray-400 hover:text-navy disabled:opacity-25"
+                      title="Subir"
+                      className="px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-navy disabled:opacity-25 disabled:hover:bg-transparent"
                     >
                       <ChevronUp className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => mover(idx, 1)}
                       disabled={idx === citas.length - 1 || bloqueada}
-                      className="p-0.5 text-gray-400 hover:text-navy disabled:opacity-25"
+                      title="Bajar"
+                      className="px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-navy disabled:opacity-25 disabled:hover:bg-transparent border-t border-gray-200"
                     >
                       <ChevronDown className="w-4 h-4" />
                     </button>
