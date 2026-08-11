@@ -106,6 +106,7 @@ model Tenant {
   smartReminders       SmartReminder[]
   consultationPayments ConsultationPayment[]
   services             Service[]
+  cashClosings         CashClosing[]
 
   @@map("tenants")
 }
@@ -276,6 +277,7 @@ model User {
   appointments        Appointment[]
   consultationMetrics DoctorConsultationMetric[] @relation("DoctorMetrics")
   registeredPayments  ConsultationPayment[]
+  cashClosings        CashClosing[]
 
   @@index([tenantId])
   @@map("users")
@@ -734,9 +736,45 @@ model ConsultationPayment {
   /// SUMA de estas líneas, recalculada por el servidor en cada guardado.
   items PaymentItem[]
 
+  /// Cierre al que quedó amarrado este cobro. Mientras esté puesto, el
+  /// cobro no se puede editar.
+  closingId String?      @map("closing_id")
+  closing   CashClosing? @relation(fields: [closingId], references: [id])
+
   @@index([tenantId, createdAt])
   @@index([insuranceId])
+  @@index([closingId])
   @@map("consultation_payments")
+}
+
+/// Cierre de caja de un día. Congela los cobros de esa fecha: mientras
+/// exista el cierre, no se pueden editar. El doctor puede reabrirlo.
+model CashClosing {
+  id       String   @id @default(cuid())
+  tenantId String   @map("tenant_id")
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  date     DateTime @db.Date
+
+  consultationsTotal Float @default(0) @map("consultations_total")
+  servicesTotal      Float @default(0) @map("services_total")
+  insuranceTotal     Float @default(0) @map("insurance_total")
+  /// Efectivo que dice el sistema.
+  cashExpected Float @default(0) @map("cash_expected")
+  /// Efectivo que contó la persona en la gaveta.
+  cashCounted Float @default(0) @map("cash_counted")
+  /// contado - esperado. Negativo = falta dinero.
+  difference Float @default(0)
+
+  closedById String? @map("closed_by_id")
+  closedBy   User?   @relation(fields: [closedById], references: [id])
+  closedAt   DateTime @default(now()) @map("closed_at")
+  notes      String?  @db.Text
+
+  payments ConsultationPayment[]
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+  @@map("cash_closings")
 }
 
 enum PaymentItemKind {

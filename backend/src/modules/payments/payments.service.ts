@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import {
   PaymentItemDto,
@@ -91,7 +96,12 @@ export class PaymentsService {
     let fee = feeConsulta;
     let motivoTarifa: string | null = null;
 
-    if (appointment.reason === 'FOLLOW_UP') {
+    if (appointment.reason === 'RESULTS_DELIVERY') {
+      // Entregar resultados no es una consulta: por defecto no se cobra.
+      // El efectivo sigue siendo editable por si este doctor sí la cobra.
+      fee = 0;
+      motivoTarifa = 'Entrega de resultados: no se cobra por defecto';
+    } else if (appointment.reason === 'FOLLOW_UP') {
       const ventana = profile?.followUpFreeDays ?? 30;
       const origen = appointment.parentAppointment?.date ?? null;
       const dias = origen
@@ -183,6 +193,18 @@ export class PaymentsService {
   ) {
     const appointment = await this.getAppointmentInTenant(appointmentId, tenantId);
 
+    // Un día cerrado no se toca. Es lo único que hace que el cierre sirva
+    // de algo: si no, sería un reporte decorativo.
+    const cerrado = await this.prisma.cashClosing.findUnique({
+      where: { tenantId_date: { tenantId, date: appointment.date } },
+      select: { id: true },
+    });
+    if (cerrado) {
+      throw new ConflictException(
+        'La caja de ese día ya está cerrada. Reábrela para poder editar el cobro.',
+      );
+    }
+
     const isCourtesy = dto.isCourtesy ?? false;
     const insuranceId = isCourtesy ? null : dto.insuranceId || null;
     const items = this.buildItems(dto, isCourtesy);
@@ -254,12 +276,191 @@ export class PaymentsService {
   }
 
   /**
+   * Cierra la caja de un día. Congela los cobros de esa fecha.
+   *
+   * El valor del cierre no es el reporte, es el congelamiento: sin eso,
+   * cualquiera podría editar un cobro de un día ya cuadrado.
+   */
+  async closeDay(
+    tenantId: string,
+    userId: string | undefined,
+    dto: { date: string; cashCounted: number; notes?: string },
+  ) {
+    const date = this.parseDate(dto.date);
+
+    const yaCerrado = await this.prisma.cashClosing.findUnique({
+      where: { tenantId_date: { tenantId, date } },
+      select: { id: true },
+    });
+    if (yaCerrado) {
+      throw new ConflictException('La caja de ese día ya está cerrada');
+    }
+
+    const resumen = (await this.getCashSummary(tenantId, dto.date)).data;
+    if (resumen.paidCount === 0 && resumen.courtesyCount === 0) {
+      throw new BadRequestException('No hay cobros registrados ese día');
+    }
+
+    const closing = await this.prisma.$transaction(async (tx) => {
+      const c = await tx.cashClosing.create({
+        data: {
+          tenantId,
+          date,
+          consultationsTotal: resumen.consultationsTotal,
+          servicesTotal: resumen.servicesTotal,
+          insuranceTotal: resumen.insuranceTotal,
+          cashExpected: resumen.cashTotal,
+          cashCounted: dto.cashCounted,
+          difference: dto.cashCounted - resumen.cashTotal,
+          closedById: userId ?? null,
+          notes: dto.notes ?? null,
+        },
+      });
+
+      // Amarrar los cobros del día al cierre: es lo que los bloquea.
+      await tx.consultationPayment.updateMany({
+        where: { tenantId, appointment: { date } },
+        data: { closingId: c.id },
+      });
+
+      return c;
+    });
+
+    return {
+      data: { ...closing, pendingCount: resumen.pendingCount },
+      message: 'Caja cerrada',
+    };
+  }
+
+  async getClosing(tenantId: string, dateStr: string) {
+    const date = this.parseDate(dateStr);
+    const closing = await this.prisma.cashClosing.findUnique({
+      where: { tenantId_date: { tenantId, date } },
+      include: { closedBy: { select: { id: true, name: true } } },
+    });
+    return { data: closing, message: closing ? 'Cierre del día' : 'Sin cierre' };
+  }
+
+  /** Reabre un día cerrado. Solo el doctor, y queda registrado en las notas. */
+  async reopenDay(tenantId: string, id: string, userId: string | undefined) {
+    const closing = await this.prisma.cashClosing.findFirst({
+      where: { id, tenantId },
+      select: { id: true, notes: true, date: true },
+    });
+    if (!closing) {
+      throw new NotFoundException('Cierre no encontrado');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.consultationPayment.updateMany({
+        where: { closingId: closing.id },
+        data: { closingId: null },
+      }),
+      this.prisma.cashClosing.delete({ where: { id: closing.id } }),
+    ]);
+
+    return {
+      data: { date: closing.date, reopenedBy: userId ?? null },
+      message: 'Caja reabierta',
+    };
+  }
+
+  /** Valida 'YYYY-MM-DD' y descarta fechas que no existen (ej. 2026-13-45). */
+  private parseDate(dateStr: string): Date {
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      throw new BadRequestException('Formato de fecha inválido. Use YYYY-MM-DD');
+    }
+    const d = dateOnlyUTC(dateStr);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== dateStr) {
+      throw new BadRequestException('Esa fecha no existe en el calendario');
+    }
+    return d;
+  }
+
+  /**
+   * Facturación día por día en un rango, más los totales del período.
+   * Reutiliza el resumen de un día, que es el caso degenerado del rango.
+   */
+  async getCashRange(tenantId: string, fromStr: string, toStr: string) {
+    const from = this.parseDate(fromStr);
+    const to = this.parseDate(toStr);
+
+    if (to < from) {
+      throw new BadRequestException('La fecha final es anterior a la inicial');
+    }
+    const dias = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
+    if (dias > 366) {
+      throw new BadRequestException('El rango no puede pasar de 366 días');
+    }
+
+    const dailies: Awaited<ReturnType<typeof this.getCashSummary>>['data'][] = [];
+    for (let i = 0; i < dias; i++) {
+      const d = new Date(from.getTime() + i * 86400000).toISOString().slice(0, 10);
+      const res = await this.getCashSummary(tenantId, d);
+      dailies.push(res.data);
+    }
+
+    // Solo se devuelven los días con movimiento: un mes entero de ceros no
+    // aporta nada y hace la tabla ilegible.
+    const conMovimiento = dailies.filter(
+      (d) => d.total > 0 || d.paidCount > 0 || d.courtesyCount > 0 || d.pendingCount > 0,
+    );
+
+    const suma = (k: 'cashTotal' | 'insuranceTotal' | 'total' | 'consultationsTotal' | 'servicesTotal') =>
+      dailies.reduce((s, d) => s + (d[k] as number), 0);
+
+    const porArs = new Map<string, { insuranceId: string; name: string; shortName: string | null; amount: number; count: number }>();
+    for (const d of dailies) {
+      for (const a of d.byInsurance) {
+        const e = porArs.get(a.insuranceId) ?? { ...a, amount: 0, count: 0 };
+        e.amount += a.amount;
+        e.count += a.count;
+        porArs.set(a.insuranceId, e);
+      }
+    }
+
+    return {
+      data: {
+        from: fromStr,
+        to: toStr,
+        days: conMovimiento.map((d) => ({
+          date: d.date,
+          cashTotal: d.cashTotal,
+          insuranceTotal: d.insuranceTotal,
+          consultationsTotal: d.consultationsTotal,
+          servicesTotal: d.servicesTotal,
+          total: d.total,
+          paidCount: d.paidCount,
+          courtesyCount: d.courtesyCount,
+          pendingCount: d.pendingCount,
+          isClosed: d.isClosed,
+        })),
+        totals: {
+          cashTotal: suma('cashTotal'),
+          insuranceTotal: suma('insuranceTotal'),
+          consultationsTotal: suma('consultationsTotal'),
+          servicesTotal: suma('servicesTotal'),
+          total: suma('total'),
+          diasConMovimiento: conMovimiento.length,
+          byInsurance: Array.from(porArs.values()).sort((a, b) => b.amount - a.amount),
+        },
+      },
+      message: 'Facturación por días',
+    };
+  }
+
+  /**
    * Resumen de caja por día (basado en la fecha de la cita en RD).
    * Separa efectivo (gaveta) de lo que se debe cobrar a cada ARS.
    */
   async getCashSummary(tenantId: string, dateStr?: string) {
     const day = dateStr || todayRDString();
-    const date = dateOnlyUTC(day);
+    const date = this.parseDate(day);
+
+    const closing = await this.prisma.cashClosing.findUnique({
+      where: { tenantId_date: { tenantId, date } },
+      select: { id: true, cashCounted: true, difference: true, closedAt: true },
+    });
 
     const appointments = await this.prisma.appointment.findMany({
       where: { tenantId, date },
@@ -341,6 +542,8 @@ export class PaymentsService {
     return {
       data: {
         date: day,
+        isClosed: closing != null,
+        closing,
         cashTotal,
         insuranceTotal,
         total: cashTotal + insuranceTotal,

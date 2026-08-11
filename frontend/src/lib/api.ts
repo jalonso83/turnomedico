@@ -597,6 +597,70 @@ export const dashboard = {
       token,
     }),
 
+  /** Facturación día por día en un rango, con totales del período. */
+  getCashRange: (from: string, to: string, token: string) =>
+    api<{
+      from: string;
+      to: string;
+      days: Array<{
+        date: string;
+        cashTotal: number;
+        insuranceTotal: number;
+        consultationsTotal: number;
+        servicesTotal: number;
+        total: number;
+        paidCount: number;
+        courtesyCount: number;
+        pendingCount: number;
+        isClosed: boolean;
+      }>;
+      totals: {
+        cashTotal: number;
+        insuranceTotal: number;
+        consultationsTotal: number;
+        servicesTotal: number;
+        total: number;
+        diasConMovimiento: number;
+        byInsurance: Array<{
+          insuranceId: string;
+          name: string;
+          shortName: string | null;
+          amount: number;
+          count: number;
+        }>;
+      };
+    }>(`/dashboard/cash/range?from=${from}&to=${to}`, { token }),
+
+  /** Cierre de un día. `data` viene null si no está cerrado. */
+  getCashClosing: (date: string, token: string) =>
+    api<{
+      id: string;
+      date: string;
+      cashExpected: number;
+      cashCounted: number;
+      difference: number;
+      consultationsTotal: number;
+      servicesTotal: number;
+      insuranceTotal: number;
+      closedAt: string;
+      notes: string | null;
+      closedBy: { id: string; name: string } | null;
+    } | null>(`/dashboard/cash/closing?date=${date}`, { token }),
+
+  /** Cierra la caja. Bloquea la edición de los cobros de ese día. Solo doctor. */
+  closeCash: (
+    data: { date: string; cashCounted: number; notes?: string },
+    token: string,
+  ) =>
+    api<{ id: string; difference: number; pendingCount: number }>(
+      "/dashboard/cash/closing",
+      { method: "POST", body: JSON.stringify(data), token },
+    ),
+
+  /** Reabre un día cerrado. Solo doctor. */
+  reopenCash: (id: string, token: string) =>
+    api<{ date: string }>(`/dashboard/cash/closing/${id}`, { method: "DELETE", token }),
+
   getCashToday: (token: string, date?: string) => {
     const qs = date ? `?date=${date}` : "";
     return api<{
@@ -606,6 +670,13 @@ export const dashboard = {
       total: number;
       consultationsTotal: number;
       servicesTotal: number;
+      isClosed: boolean;
+      closing: {
+        id: string;
+        cashCounted: number;
+        difference: number;
+        closedAt: string;
+      } | null;
       paidCount: number;
       courtesyCount: number;
       pendingCount: number;
