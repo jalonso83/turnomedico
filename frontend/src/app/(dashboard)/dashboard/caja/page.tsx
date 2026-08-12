@@ -80,6 +80,10 @@ export default function CajaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Cerrar y reabrir la caja son del doctor. El backend ya devuelve 403,
+  // pero mostrarle el boton a la secretaria solo sirve para frustrarla.
+  const [isSecretary, setIsSecretary] = useState(false);
+
   const [tab, setTab] = useState<"hoy" | "historial">("hoy");
   const [desde, setDesde] = useState(hace(30));
   const [hasta, setHasta] = useState(todayStr());
@@ -130,6 +134,14 @@ export default function CajaPage() {
       setLoadingRango(false);
     }
   }, [desde, hasta]);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    (dashboard.getMe(token) as Promise<{ role: string }>)
+      .then((me) => setIsSecretary(me.role === "SECRETARY"))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchCash();
@@ -249,16 +261,18 @@ export default function CajaPage() {
                   </span>
                 </p>
               </div>
-              <button
-                onClick={reabrir}
-                disabled={closing}
-                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-white disabled:opacity-60"
-              >
-                Reabrir
-              </button>
+              {!isSecretary && (
+                <button
+                  onClick={reabrir}
+                  disabled={closing}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-white disabled:opacity-60"
+                >
+                  Reabrir
+                </button>
+              )}
             </div>
           ) : (
-            (data.paidCount > 0 || data.courtesyCount > 0) && (
+            !isSecretary && (data.paidCount > 0 || data.courtesyCount > 0) && (
               <div className="mb-5 flex justify-end">
                 <button
                   onClick={() => { setCounted(String(data.cashTotal)); setShowClose(true); }}
