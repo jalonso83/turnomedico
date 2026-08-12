@@ -171,11 +171,15 @@ export default function TurnosPage() {
     const token = getToken();
     if (!token) return;
     const texto = mensajePara(c);
-    window.open(
+    // Pestaña con nombre fijo: cada clic REUTILIZA la misma en vez de abrir
+    // una nueva. Con 20 pacientes, "_blank" dejaba 20 pestañas abiertas.
+    // El destino es un host fijo nuestro (wa.me), así que prescindir de
+    // noopener aquí no expone nada: hace falta el handle para enfocarla.
+    const wa = window.open(
       `https://wa.me/${telefonoWa(c.patient.phone)}?text=${encodeURIComponent(texto)}`,
-      "_blank",
-      "noopener",
+      "turnomedico_whatsapp",
     );
+    wa?.focus();
     try {
       await dashboard.markNotified(c.id, texto, token);
       setCitas((prev) =>
@@ -384,7 +388,8 @@ export default function TurnosPage() {
           </div>
           <p className="text-xs text-gray-400 mt-2">
             A quien ya tiene turno no se le cambia el número: si vuelves a confirmar, solo se
-            numeran las citas nuevas.
+            numeran las citas nuevas. Los avisos se abren siempre en la misma pestaña de
+            WhatsApp.
           </p>
         </>
       )}
