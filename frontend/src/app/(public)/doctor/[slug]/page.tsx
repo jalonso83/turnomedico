@@ -260,7 +260,7 @@ export default function DoctorProfilePage() {
         consultorioName: result.consultorioName,
       });
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Error al agendar la cita");
+      setFormError(err instanceof Error ? err.message : "Error al enviar la solicitud");
     } finally {
       setSubmitting(false);
     }
@@ -319,11 +319,14 @@ export default function DoctorProfilePage() {
           <div className="w-20 h-20 bg-teal/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-12 h-12 text-teal" strokeWidth={1.5} />
           </div>
+          {/* La cita nace PENDING: la confirma el consultorio, no la web.
+              Decir "confirmada" aqui contradecia al propio recuadro de abajo,
+              que dice que el consultorio la confirmara. */}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Cita confirmada!
+            Solicitud enviada!
           </h2>
           <p className="text-sm text-gray-500 mb-6">
-            Tu cita ha sido agendada exitosamente
+            El consultorio la revisara y te confirmara por WhatsApp
           </p>
 
           <div className="bg-gray-50 rounded-xl p-5 text-left space-y-3 mb-6">
@@ -353,9 +356,10 @@ export default function DoctorProfilePage() {
             <div className="flex items-start gap-3">
               <Info className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
               <div>
-                <p className="text-xs text-gray-500">Tu turno</p>
-                <p className="text-sm text-gray-700">
-                  El consultorio confirmara tu cita y te enviara tu numero por WhatsApp.
+                <p className="text-xs text-gray-500">Estado</p>
+                <p className="text-sm font-medium text-amber-700">Pendiente de confirmacion</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  El consultorio confirmara tu cita y te enviara tu numero de turno por WhatsApp.
                 </p>
               </div>
             </div>
@@ -671,7 +675,7 @@ export default function DoctorProfilePage() {
                       onClick={() => setShowForm(true)}
                       className="w-full mt-2 bg-brand-gradient text-white py-3 rounded-xl text-sm font-semibold hover:opacity-95 transition-opacity"
                     >
-                      Reservar mi turno
+                      Solicitar mi cita
                     </button>
                   )}
                 </div>
@@ -680,7 +684,7 @@ export default function DoctorProfilePage() {
           ) : null}
         </div>
 
-        {/* Booking form (shown when "Reservar mi turno" pressed) */}
+        {/* Booking form (shown when "Solicitar mi cita" pressed) */}
         {showForm && selectedDate && canBook && (
           <div className="border-t border-gray-100 pt-6">
             {/* Summary */}
@@ -772,10 +776,10 @@ export default function DoctorProfilePage() {
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Agendando...
+                    Enviando...
                   </>
                 ) : (
-                  "Confirmar Cita"
+                  "Enviar solicitud"
                 )}
               </button>
             </div>

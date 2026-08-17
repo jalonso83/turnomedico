@@ -504,7 +504,7 @@ export default function HomePage() {
             {[
               {
                 q: "¿El paciente necesita crear una cuenta?",
-                a: "No. El paciente agenda solo con su nombre y número de teléfono. En 60 segundos tiene su cita confirmada. Sin registro, sin contraseña, sin descargar nada.",
+                a: "No. El paciente pide su cita solo con su nombre y número de teléfono, en 60 segundos. Tu secretaria la confirma y le envía su número de turno por WhatsApp. Sin registro, sin contraseña, sin descargar nada.",
               },
               {
                 q: "¿Cuánto cuesta para el paciente?",
