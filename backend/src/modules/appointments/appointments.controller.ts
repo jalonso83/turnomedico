@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -66,9 +67,20 @@ export class AppointmentsController {
   }
 
   @Put('reorder')
-  @ApiOperation({ summary: 'Reordenar los turnos del día (asigna 1..N)' })
+  @ApiOperation({
+    summary:
+      'Reordenar los turnos del día. Conserva el número de quien ya fue avisado ' +
+      'o ya llegó; reparte los libres entre el resto.',
+  })
   async reorder(@CurrentTenant() tenantId: string, @Body() dto: ReorderQueueDto) {
-    return this.appointmentsService.reorderQueue(tenantId, dto.date, dto.orderedIds);
+    // `items` es la forma nueva (con número explícito); `orderedIds` la vieja.
+    // Se aceptan las dos mientras conviven versiones de frontend y backend.
+    const entrada =
+      dto.items ?? (dto.orderedIds ?? []).map((id) => ({ id, queuePosition: null }));
+    if (entrada.length === 0) {
+      throw new BadRequestException('Hay que mandar items u orderedIds');
+    }
+    return this.appointmentsService.reorderQueue(tenantId, dto.date, entrada);
   }
 
   @Post('confirm-day')

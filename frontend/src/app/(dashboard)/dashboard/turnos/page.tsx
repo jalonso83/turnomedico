@@ -19,6 +19,72 @@ import { getToken, dashboard, type AgendaAppointment } from "@/lib/api";
 const EN_CURSO = ["ARRIVED", "IN_PROGRESS", "COMPLETED"];
 const MUERTOS = ["CANCELLED_PATIENT", "CANCELLED_DOCTOR", "NO_SHOW"];
 
+/**
+ * Un turno se congela cuando ya es una promesa: o se le avisó al paciente
+ * ("eres el 3ro") o ya está en el consultorio. Lo demás se puede acomodar,
+ * tenga número o no. Es la misma regla que aplica el backend en `reorderQueue`.
+ */
+function congelada(c: AgendaAppointment) {
+  return c.notifiedAt != null || EN_CURSO.includes(c.status);
+}
+
+/**
+ * Ordena la lista por número de turno; las que no tienen van al final.
+ *
+ * La agenda del backend ordena por ESTADO primero (quien ya llegó sube al tope),
+ * que sirve para la pantalla de consulta pero no para la fila: aquí lo que manda
+ * es el número. Sin esto, el paciente que llega salta al primer puesto de la
+ * lista aunque tenga el turno 4, y lo que se ve deja de ser la fila real.
+ */
+function ordenarCola(lista: AgendaAppointment[]) {
+  return [...lista].sort((a, b) => {
+    const qa = a.queuePosition ?? Number.MAX_SAFE_INTEGER;
+    const qb = b.queuePosition ?? Number.MAX_SAFE_INTEGER;
+    if (qa !== qb) return qa - qb;
+    return (a.startTime ?? "").localeCompare(b.startTime ?? "");
+  });
+}
+
+/**
+ * Calcula el número que le tocaría a cada cita, con la MISMA lógica del
+ * servidor: los congelados conservan el suyo, los fijados a mano toman el que
+ * la secretaria escribió, y el resto va tomando el más bajo que quede libre,
+ * en el orden en que están en pantalla.
+ *
+ * Se replica en el cliente para que lo que se ve antes de guardar sea
+ * exactamente lo que va a quedar guardado.
+ */
+function calcularNumeros(
+  lista: AgendaAppointment[],
+  fijados: Record<string, number>,
+): Record<string, number> {
+  const usados = new Set<number>();
+  const salida: Record<string, number> = {};
+
+  for (const c of lista) {
+    if (congelada(c) && c.queuePosition != null) {
+      usados.add(c.queuePosition);
+      salida[c.id] = c.queuePosition;
+    }
+  }
+  for (const c of lista) {
+    if (salida[c.id] != null) continue;
+    const pedido = fijados[c.id];
+    if (pedido != null && !usados.has(pedido)) {
+      usados.add(pedido);
+      salida[c.id] = pedido;
+    }
+  }
+  let cursor = 1;
+  for (const c of lista) {
+    if (salida[c.id] != null) continue;
+    while (usados.has(cursor)) cursor++;
+    usados.add(cursor);
+    salida[c.id] = cursor;
+  }
+  return salida;
+}
+
 function hoyRD() {
   const ahora = new Date();
   const rd = new Date(ahora.getTime() - 4 * 60 * 60 * 1000);
@@ -68,7 +134,8 @@ export default function TurnosPage() {
     try {
       const res = await dashboard.getAgendaByDate(date, token);
       // Las canceladas y ausentes no se ordenan ni se avisan.
-      setCitas(res.appointments.filter((a) => !MUERTOS.includes(a.status)));
+      setCitas(ordenarCola(res.appointments.filter((a) => !MUERTOS.includes(a.status))));
+      setFijados({});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al cargar la agenda");
     } finally {
@@ -88,42 +155,68 @@ export default function TurnosPage() {
       .catch(() => {});
   }, []);
 
+  /** Números que la secretaria escribió a mano; el resto se calcula solo. */
+  const [fijados, setFijados] = useState<Record<string, number>>({});
+
+  const numeros = calcularNumeros(citas, fijados);
+
   const mover = (idx: number, dir: -1 | 1) => moverA(idx, idx + dir);
 
   /**
-   * Lleva la cita de `idx` a la posición `destino` y recorre las demás.
-   * Es lo que usan tanto las flechas como la casilla editable.
+   * Sube o baja una cita en la lista. Solo cambia el ORDEN: los números los
+   * recalcula `calcularNumeros`, respetando los congelados.
    */
   const moverA = (idx: number, destino: number) => {
     if (destino < 0 || destino >= citas.length || destino === idx) return;
-    if (EN_CURSO.includes(citas[idx].status)) {
-      setError("No se puede mover a un paciente que ya llegó");
-      return;
-    }
-    // Tampoco se puede saltar por encima de alguien que ya está siendo
-    // atendido: su turno está en curso.
-    const rango = citas.slice(Math.min(idx, destino), Math.max(idx, destino) + 1);
-    if (rango.some((c, i) => (i !== (idx < destino ? 0 : rango.length - 1)) && EN_CURSO.includes(c.status))) {
-      setError("Hay un paciente que ya llegó en el medio: no se puede reordenar por encima de él");
+    if (congelada(citas[idx])) {
+      setError("Ese turno ya se le avisó al paciente o ya llegó: no se puede mover");
       return;
     }
     const copia = [...citas];
     const [movida] = copia.splice(idx, 1);
     copia.splice(destino, 0, movida);
     setCitas(copia);
+    // Al moverla a mano, deja de valer el número que se le hubiera escrito:
+    // manda la posición en la lista.
+    setFijados((f) => {
+      const { [movida.id]: _, ...resto } = f;
+      return resto;
+    });
     setError("");
   };
 
   /** Lo que la secretaria está escribiendo en la casilla de una fila. */
   const [editandoPos, setEditandoPos] = useState<{ id: string; valor: string } | null>(null);
 
+  /**
+   * Fija el número que la secretaria escribió. Si ese número ya es de alguien
+   * a quien se le avisó, se rechaza en el acto y se dice de quién es — mejor
+   * enterarse aquí que al guardar.
+   */
   const confirmarPosicion = (idx: number) => {
     if (!editandoPos) return;
+    const cita = citas[idx];
     const n = parseInt(editandoPos.valor, 10);
     setEditandoPos(null);
-    if (Number.isNaN(n)) return;
-    moverA(idx, Math.min(Math.max(1, n), citas.length) - 1);
+    if (Number.isNaN(n) || n < 1) return;
+
+    const dueno = citas.find((c) => c.id !== cita.id && congelada(c) && c.queuePosition === n);
+    if (dueno) {
+      setError(`El turno ${n} ya es de ${dueno.patient.name} y no se puede reasignar`);
+      return;
+    }
+    setFijados((f) => ({ ...f, [cita.id]: n }));
+    setError("");
   };
+
+  /**
+   * Lo que se manda al servidor: cada cita en el orden de pantalla, con el
+   * número que la secretaria escribió (si escribió alguno). Las congeladas van
+   * también, para que el servidor las reconozca como ocupadas, pero sin número
+   * pedido: él conserva el que ya tienen.
+   */
+  const itemsParaGuardar = () =>
+    citas.map((c) => ({ id: c.id, queuePosition: fijados[c.id] ?? null }));
 
   const guardarOrden = async () => {
     const token = getToken();
@@ -131,8 +224,9 @@ export default function TurnosPage() {
     setBusy(true);
     setError("");
     try {
-      const res = await dashboard.reorderQueue(date, citas.map((c) => c.id), token);
-      setCitas(res.appointments.filter((a) => !MUERTOS.includes(a.status)));
+      const res = await dashboard.reorderQueue(date, itemsParaGuardar(), token);
+      setCitas(ordenarCola(res.appointments.filter((a) => !MUERTOS.includes(a.status))));
+      setFijados({});
       flash("Orden guardado");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar el orden");
@@ -150,7 +244,7 @@ export default function TurnosPage() {
       // Primero se congela el orden que la secretaria dejó en pantalla,
       // y después se confirma. Al revés, confirmar numeraría por orden de
       // reserva y perdería lo que ella acomodó.
-      await dashboard.reorderQueue(date, citas.map((c) => c.id), token);
+      await dashboard.reorderQueue(date, itemsParaGuardar(), token);
       const r = await dashboard.confirmDay(date, token);
       await load();
       flash(`Listo: ${r.confirmadas} confirmadas, ${r.numeradas} con turno nuevo`);
@@ -265,13 +359,17 @@ export default function TurnosPage() {
           </div>
 
           <p className="text-xs text-gray-500 mb-2">
-            El orden que ves es solo una sugerencia, por hora de reserva. Escribe la posición en
-            la casilla del número, o usa las flechas, y luego confirma.
+            Escribe el número de turno en la casilla, o usa las flechas, y luego guarda. Los
+            turnos que ya se le avisaron al paciente, y los de quien ya llegó, quedan fijos: no
+            se pueden cambiar ni reutilizar. Los demás sí, incluso si llega alguien nuevo.
+            <span className="text-amber-700"> En ámbar, lo que cambiará al guardar.</span>
           </p>
 
           <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden mb-4">
             {citas.map((c, idx) => {
-              const bloqueada = EN_CURSO.includes(c.status);
+              const bloqueada = congelada(c);
+              const num = numeros[c.id];
+              const porGuardar = c.queuePosition !== num;
               return (
                 <div
                   key={c.id}
@@ -280,8 +378,12 @@ export default function TurnosPage() {
                   {/* Número: se puede escribir directo para mover la cita ahí */}
                   {bloqueada ? (
                     <span
-                      className="w-11 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 bg-gray-100 text-gray-400"
-                      title="Ya llegó: su turno no se puede cambiar"
+                      className="w-11 h-9 rounded-lg flex items-center justify-center text-sm font-bold shrink-0 bg-gray-100 text-gray-500"
+                      title={
+                        c.notifiedAt
+                          ? "Ya se le avisó este turno: no se puede cambiar"
+                          : "Ya llegó: su turno no se puede cambiar"
+                      }
                     >
                       {c.queuePosition ?? "—"}
                     </span>
@@ -289,13 +391,8 @@ export default function TurnosPage() {
                     <input
                       type="number"
                       min={1}
-                      max={citas.length}
                       value={
-                        editandoPos?.id === c.id
-                          ? editandoPos.valor
-                          : c.queuePosition != null
-                            ? String(c.queuePosition)
-                            : String(idx + 1)
+                        editandoPos?.id === c.id ? editandoPos.valor : String(num ?? "")
                       }
                       onChange={(e) => setEditandoPos({ id: c.id, valor: e.target.value })}
                       onBlur={() => confirmarPosicion(idx)}
@@ -303,11 +400,11 @@ export default function TurnosPage() {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                         if (e.key === "Escape") setEditandoPos(null);
                       }}
-                      title="Escribe la posición y presiona Enter"
+                      title="Escribe el número de turno y presiona Enter"
                       className={`w-11 h-9 rounded-lg text-center text-sm font-bold shrink-0 border outline-none focus:ring-2 focus:ring-teal ${
-                        c.queuePosition != null
-                          ? "bg-teal/10 text-teal border-teal/30"
-                          : "bg-white text-gray-500 border-gray-300"
+                        porGuardar
+                          ? "bg-amber-50 text-amber-800 border-amber-300"
+                          : "bg-teal/10 text-teal border-teal/30"
                       }`}
                     />
                   )}
@@ -319,7 +416,9 @@ export default function TurnosPage() {
                       {c.status === "PENDING" && (
                         <span className="text-amber-700">Por confirmar</span>
                       )}
-                      {bloqueada && <span className="text-gray-500">Ya llegó</span>}
+                      {EN_CURSO.includes(c.status) && (
+                        <span className="text-gray-500">Ya llegó</span>
+                      )}
                       {c.notifiedAt && (
                         <span className="text-green-700 flex items-center gap-0.5">
                           <Check className="w-3 h-3" /> avisado

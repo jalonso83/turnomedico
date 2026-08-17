@@ -194,10 +194,19 @@ export const dashboard = {
     }>(`/dashboard/appointments/by-date?date=${date}`, { token }),
 
   /** Asigna queuePosition 1..N en el orden recibido. */
-  reorderQueue: (date: string, orderedIds: string[], token: string) =>
+  /**
+   * Guarda la fila del día. Cada elemento va en el orden deseado y puede traer
+   * el número que la secretaria escribió; sin número, el servidor le da el más
+   * bajo que quede libre. Los turnos ya avisados nunca se tocan.
+   */
+  reorderQueue: (
+    date: string,
+    items: { id: string; queuePosition: number | null }[],
+    token: string,
+  ) =>
     api<{ appointments: AgendaAppointment[]; stats: Record<string, number> }>(
       "/dashboard/appointments/reorder",
-      { method: "PUT", body: JSON.stringify({ date, orderedIds }), token },
+      { method: "PUT", body: JSON.stringify({ date, items }), token },
     ),
 
   /** Confirma las pendientes y numera las que no tengan turno. */

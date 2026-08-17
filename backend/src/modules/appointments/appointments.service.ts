@@ -172,49 +172,125 @@ export class AppointmentsService {
   ];
 
   /**
-   * Reordena los turnos de un día. Recibe los ids en el orden deseado y les
-   * asigna 1..N. Solo se pueden mover citas que aún no han llegado: si el
-   * paciente ya está en el consultorio, su turno está en curso.
+   * Reordena los turnos de un día.
+   *
+   * ## La regla
+   *
+   * Un número de turno se vuelve una PROMESA en el momento en que se le dice al
+   * paciente ("eres el 3ro"). A partir de ahí no se toca. Todo lo demás se puede
+   * acomodar libremente.
+   *
+   * Se congela una cita cuando:
+   *   · ya se le avisó el turno al paciente (hay una `Notification` CONFIRMATION), o
+   *   · el paciente ya llegó o está siendo atendido (su turno está en curso).
+   *
+   * Las demás son movibles, TENGAN O NO número: si a alguien se le asignó el 4
+   * pero todavía no se le avisó, se le puede cambiar sin faltarle a nadie.
+   *
+   * ## Por qué se reescribió (ago-2026)
+   *
+   * La versión anterior asignaba 1..N por posición en el arreglo, sin mirar a quién
+   * se le había avisado. Chocaba con el orden de la pantalla —que sube al tope a
+   * quien ya llegó— así que en cuanto un paciente entraba al consultorio, guardar
+   * el orden intentaba ponerle el turno 1 y reventaba con "No se puede cambiar el
+   * turno de un paciente que ya llegó". Ni siquiera hacía falta que llegara alguien
+   * nuevo. Y en el camino renumeraba a gente ya avisada, que es justo lo que
+   * `confirmDay` se cuidaba de no hacer: las dos funciones se contradecían.
+   *
+   * Ahora los congelados se dejan intactos en vez de rechazar la operación, así que
+   * el caso normal —llega un paciente nuevo y hay que darle número— no falla nunca.
+   *
+   * @param entrada Cada elemento puede traer el número que la secretaria escribió.
+   *                Sin número, se le da el más bajo que esté libre.
    */
-  async reorderQueue(tenantId: string, dateStr: string, orderedIds: string[]) {
+  async reorderQueue(
+    tenantId: string,
+    dateStr: string,
+    entrada: { id: string; queuePosition?: number | null }[],
+  ) {
     const date = this.parseDate(dateStr);
 
     const delDia = await this.prisma.appointment.findMany({
       where: { tenantId, date, status: { notIn: this.DEAD_STATUSES } },
-      select: { id: true, status: true, queuePosition: true },
+      select: {
+        id: true,
+        status: true,
+        queuePosition: true,
+        patient: { select: { name: true } },
+        notifications: {
+          where: { type: 'CONFIRMATION' },
+          select: { id: true },
+          take: 1,
+        },
+      },
     });
 
-    const validos = new Set(delDia.map((a) => a.id));
-    for (const id of orderedIds) {
-      if (!validos.has(id)) {
+    const porId = new Map(delDia.map((a) => [a.id, a]));
+    const vistos = new Set<string>();
+    for (const it of entrada) {
+      if (!porId.has(it.id)) {
         throw new BadRequestException('Hay una cita que no es de este día o no existe');
       }
-    }
-    if (new Set(orderedIds).size !== orderedIds.length) {
-      throw new BadRequestException('Hay una cita repetida en el orden');
+      if (vistos.has(it.id)) {
+        throw new BadRequestException('Hay una cita repetida en el orden');
+      }
+      vistos.add(it.id);
     }
 
-    const enCurso = delDia.filter(
-      (a) => a.status === 'ARRIVED' || a.status === 'IN_PROGRESS' || a.status === 'COMPLETED',
+    const congelada = (a: (typeof delDia)[number]) =>
+      a.notifications.length > 0 ||
+      a.status === 'ARRIVED' ||
+      a.status === 'IN_PROGRESS' ||
+      a.status === 'COMPLETED';
+
+    // Los números que ya son promesa. No se reasignan ni se reutilizan.
+    const reservados = new Map<number, string>();
+    for (const a of delDia) {
+      if (congelada(a) && a.queuePosition != null) {
+        reservados.set(a.queuePosition, a.patient?.name ?? 'otro paciente');
+      }
+    }
+
+    const movibles = entrada.filter((it) => !congelada(porId.get(it.id)!));
+
+    // 1) Primero se apartan los números que la secretaria pidió explícitamente.
+    const asignado = new Map<string, number>();
+    for (const it of movibles) {
+      const pedido = it.queuePosition;
+      if (pedido == null) continue;
+      const dueno = reservados.get(pedido);
+      if (dueno) {
+        throw new BadRequestException(
+          `El turno ${pedido} ya es de ${dueno} y no se puede reasignar`,
+        );
+      }
+      reservados.set(pedido, porId.get(it.id)!.patient?.name ?? 'este paciente');
+      asignado.set(it.id, pedido);
+    }
+
+    // 2) Los que no pidieron número toman el más bajo libre, en el orden recibido.
+    let cursor = 1;
+    for (const it of movibles) {
+      if (asignado.has(it.id)) continue;
+      while (reservados.has(cursor)) cursor++;
+      reservados.set(cursor, porId.get(it.id)!.patient?.name ?? 'este paciente');
+      asignado.set(it.id, cursor);
+    }
+
+    // 3) Solo se escriben las que de verdad cambian.
+    const cambios = [...asignado.entries()].filter(
+      ([id, pos]) => porId.get(id)!.queuePosition !== pos,
     );
-    const moviendoEnCurso = enCurso.filter((a) => {
-      const idx = orderedIds.indexOf(a.id);
-      return idx >= 0 && a.queuePosition != null && a.queuePosition !== idx + 1;
-    });
-    if (moviendoEnCurso.length > 0) {
-      throw new BadRequestException(
-        'No se puede cambiar el turno de un paciente que ya llegó o fue atendido',
+    if (cambios.length > 0) {
+      await this.prisma.$transaction(
+        cambios.map(([id, pos]) =>
+          this.prisma.appointment.update({
+            where: { id },
+            data: { queuePosition: pos },
+          }),
+        ),
       );
     }
-
-    await this.prisma.$transaction(
-      orderedIds.map((id, idx) =>
-        this.prisma.appointment.update({
-          where: { id },
-          data: { queuePosition: idx + 1 },
-        }),
-      ),
-    );
 
     return this.getAppointmentsByDate(tenantId, dateStr);
   }
