@@ -47,7 +47,23 @@ export class PatientsService {
     return tp;
   }
 
+  /**
+   * Lista paginada de pacientes del consultorio.
+   *
+   * El orden es `updatedAt desc` de la relación tenant-paciente, que en la
+   * práctica es "actividad más reciente": reservar una cita hace upsert de esa
+   * fila y le mueve la fecha.
+   *
+   * Antes esta función reordenaba el resultado por `lastVisit` DESPUÉS de
+   * paginar, así que cada página venía ordenada por su cuenta y un paciente de
+   * la página 2 podía tener una visita más reciente que uno de la página 1.
+   * Sin paginado en pantalla el detalle pasaba inadvertido; con paginado se ve.
+   * Se quitó ese reordenamiento: el orden es uno solo y vale para toda la lista.
+   */
   async listByTenant(tenantId: string, search?: string, page = 1, limit = 20) {
+    // Sin techo, un `?limit=100000` traería la tabla entera de un golpe.
+    limit = Math.min(Math.max(Number.isFinite(limit) ? limit : 20, 1), 100);
+    page = Math.max(Number.isFinite(page) ? page : 1, 1);
     const skip = (page - 1) * limit;
 
     const where: any = { tenantId };
@@ -112,16 +128,14 @@ export class PatientsService {
       };
     });
 
-    // Sort by lastVisit desc (patients with visits first)
-    patients.sort((a, b) => {
-      if (!a.lastVisit && !b.lastVisit) return 0;
-      if (!a.lastVisit) return 1;
-      if (!b.lastVisit) return -1;
-      return new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime();
-    });
-
     return {
-      data: { patients, total, page, limit },
+      data: {
+        patients,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      },
       message: 'Pacientes obtenidos',
     };
   }

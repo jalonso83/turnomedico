@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Search, Phone, Calendar, ChevronDown, ChevronUp, Clock, ArrowRight } from "lucide-react";
+import {
+  Users,
+  Search,
+  Phone,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ArrowRight,
+} from "lucide-react";
 import { getToken, dashboard } from "@/lib/api";
 
 interface Patient {
@@ -43,8 +54,13 @@ export default function PacientesPage() {
   const [historyLoading, setHistoryLoading] = useState<string | null>(null);
   const [searchTimeout, setSearchTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
+  const PORPAGINA = 20;
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const fetchPatients = useCallback(
-    async (query?: string) => {
+    async (query?: string, pagina = 1) => {
       const token = getToken();
       if (!token) {
         router.push("/login");
@@ -52,11 +68,15 @@ export default function PacientesPage() {
       }
 
       try {
-        const data = await dashboard.getPatients(token, query || undefined);
+        const data = await dashboard.getPatients(token, query || undefined, pagina, PORPAGINA);
         const list = Array.isArray(data)
           ? data
           : ((data as { patients?: Patient[] })?.patients ?? []);
         setPatients(list as Patient[]);
+        setTotal((data as { total?: number })?.total ?? list.length);
+        setTotalPages((data as { totalPages?: number })?.totalPages ?? 1);
+        setPage(pagina);
+        setExpandedId(null); // al cambiar de página, cerrar el acordeón abierto
         setError("");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al cargar pacientes");
@@ -71,12 +91,20 @@ export default function PacientesPage() {
     fetchPatients();
   }, [fetchPatients]);
 
+  const irAPagina = (p: number) => {
+    if (p < 1 || p > totalPages || p === page) return;
+    setLoading(true);
+    fetchPatients(search || undefined, p);
+  };
+
   const handleSearchChange = (value: string) => {
     setSearch(value);
     if (searchTimeout) clearTimeout(searchTimeout);
     const timeout = setTimeout(() => {
       setLoading(true);
-      fetchPatients(value);
+      // Una búsqueda nueva siempre arranca en la página 1: quedarse en la 5
+      // mostraría "sin resultados" aunque los haya.
+      fetchPatients(value, 1);
     }, 400);
     setSearchTimeout(timeout);
   };
@@ -191,16 +219,19 @@ export default function PacientesPage() {
                 <th className="text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Nombre
                 </th>
-                <th className="text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
+                {/* Anchos fijos en las columnas de dato: sin esto, el ancho lo
+                    decide el contenido y las columnas se mueven de una carga a
+                    otra segun el largo de los telefonos o las fechas. */}
+                <th className="w-44 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Telefono
                 </th>
-                <th className="text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
+                <th className="w-44 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Ultima visita
                 </th>
-                <th className="text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
+                <th className="w-36 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Total visitas
                 </th>
-                <th className="text-right text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
+                <th className="w-24 text-right text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Historial
                 </th>
               </tr>
@@ -224,44 +255,50 @@ export default function PacientesPage() {
                   0;
 
                 return (
-                  <tr key={patient.id} className="group">
-                    <td colSpan={5} className="p-0">
-                      <div
-                        className="flex items-center hover:bg-gray-50 transition-colors cursor-pointer px-6 py-4"
-                        onClick={() => toggleExpand(patient.id)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900">{patient.name}</p>
+                  <Fragment key={patient.id}>
+                    {/* Fila resumen: celdas de tabla reales, para que caigan
+                        debajo de su encabezado. Antes era un solo td con
+                        colSpan={5} y un flexbox adentro con anchos propios:
+                        dos sistemas de layout distintos que no podian
+                        alinearse, y por eso Telefono y Ultima visita salian
+                        corridas respecto a su etiqueta. */}
+                    <tr
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => toggleExpand(patient.id)}
+                    >
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-medium text-gray-900">{patient.name}</p>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                          <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" strokeWidth={1.5} />
+                          {patient.phone}
                         </div>
-                        <div className="w-40">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                            <Phone className="w-3.5 h-3.5 text-gray-400" strokeWidth={1.5} />
-                            {patient.phone}
-                          </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" strokeWidth={1.5} />
+                          {lastVisit ? formatDate(lastVisit) : "N/A"}
                         </div>
-                        <div className="w-36">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                            <Calendar className="w-3.5 h-3.5 text-gray-400" strokeWidth={1.5} />
-                            {lastVisit ? formatDate(lastVisit) : "N/A"}
-                          </div>
-                        </div>
-                        <div className="w-28">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal/10 text-teal">
-                            {totalVisits} visitas
-                          </span>
-                        </div>
-                        <div className="w-16 text-right">
-                          {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-gray-400 inline" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-400 inline" />
-                          )}
-                        </div>
-                      </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal/10 text-teal whitespace-nowrap">
+                          {totalVisits} visitas
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {isExpanded ? (
+                          <ChevronUp className="w-5 h-5 text-gray-400 inline" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-400 inline" />
+                        )}
+                      </td>
+                    </tr>
 
-                      {/* Expanded history */}
-                      {isExpanded && (
-                        <div className="px-6 pb-4 bg-gray-50/50">
+                    {/* Historial: fila aparte que ocupa todo el ancho */}
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={5} className="px-6 pb-4 bg-gray-50/50">
                           {isLoadingHistory ? (
                             <div className="py-4 space-y-2">
                               {[1, 2].map((i) => (
@@ -303,14 +340,57 @@ export default function PacientesPage() {
                               <ArrowRight className="w-3.5 h-3.5" strokeWidth={1.5} />
                             </Link>
                           </div>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
+
+          {/* Paginado. Se muestra el rango y el total para que quede claro que
+              la lista no termina en los 20 que se ven. */}
+          <div className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-6 py-3">
+            <p className="text-xs text-gray-600">
+              {total === 0 ? (
+                "Sin pacientes"
+              ) : (
+                <>
+                  Mostrando{" "}
+                  <span className="font-semibold text-navy">
+                    {(page - 1) * PORPAGINA + 1}–{Math.min(page * PORPAGINA, total)}
+                  </span>{" "}
+                  de <span className="font-semibold text-navy">{total}</span>
+                  {total === 1 ? " paciente" : " pacientes"}
+                </>
+              )}
+            </p>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => irAPagina(page - 1)}
+                  disabled={page === 1 || loading}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent"
+                  aria-label="Página anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="px-3 text-xs text-gray-600 tabular-nums">
+                  Página <span className="font-semibold text-navy">{page}</span> de {totalPages}
+                </span>
+                <button
+                  onClick={() => irAPagina(page + 1)}
+                  disabled={page === totalPages || loading}
+                  className="px-2.5 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-white disabled:opacity-35 disabled:hover:bg-transparent"
+                  aria-label="Página siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">

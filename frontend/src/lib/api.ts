@@ -343,9 +343,21 @@ export const dashboard = {
     }),
 
   // ── Patients ──────────────────────────────────────────────
-  getPatients: (token: string, search?: string) => {
-    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
-    return api(`/dashboard/patients${qs}`, { token });
+  /**
+   * Lista paginada. El backend siempre pagina (20 por defecto); antes el
+   * frontend no mandaba `page` ni leía `total`, así que el doctor veía los
+   * primeros 20 pacientes y ninguna señal de que hubiera más.
+   */
+  getPatients: (token: string, search?: string, page = 1, limit = 20) => {
+    const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (search) qs.set("search", search);
+    return api<{
+      patients: unknown[];
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>(`/dashboard/patients?${qs.toString()}`, { token });
   },
 
   getPatient: (id: string, token: string) =>
