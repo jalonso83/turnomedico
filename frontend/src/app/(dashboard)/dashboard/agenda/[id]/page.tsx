@@ -29,6 +29,16 @@ import { getToken, dashboard } from "@/lib/api";
 
 type Tab = "nota" | "vitales" | "receta";
 
+/** Las tres cosas que se guardan por separado dentro de la consulta. */
+type Seccion = "soap" | "vitals" | "rx";
+
+/** Para poder llevar al médico a la pestaña donde está el dato que falló. */
+const TAB_DE_SECCION: Record<Seccion, Tab> = {
+  soap: "nota",
+  vitals: "vitales",
+  rx: "receta",
+};
+
 interface MedicalRecord {
   appointment: {
     id: string;
@@ -227,6 +237,29 @@ export default function AtenderCitaPage() {
 
   const bmi = useMemo(() => calcBmi(vitals.weight, vitals.height), [vitals.weight, vitals.height]);
 
+  /**
+   * Error de guardado, con la sección que lo produjo.
+   *
+   * Antes se usaba el `error` general y NUNCA se limpiaba al guardar bien: si
+   * escribías una temperatura fuera de rango, el mensaje se quedaba pegado
+   * aunque corrigieras el dato y el guardado siguiente funcionara. Como el
+   * autosave reintenta solo, el dato SÍ quedaba guardado — pero la pantalla
+   * seguía diciendo que había fallado.
+   *
+   * Se guarda la sección para no borrar el error de una al guardar bien en otra.
+   */
+  const [saveError, setSaveError] = useState<{ seccion: Seccion; msg: string } | null>(null);
+
+  const marcarError = useCallback((seccion: Seccion, err: unknown, fallback: string) => {
+    if (!mountedRef.current) return;
+    setSaveError({ seccion, msg: err instanceof Error ? err.message : fallback });
+  }, []);
+
+  /** Se guardó bien: si el error visible era de esta sección, ya no aplica. */
+  const limpiarError = useCallback((seccion: Seccion) => {
+    setSaveError((prev) => (prev?.seccion === seccion ? null : prev));
+  }, []);
+
   // ── Persistencia compartida (botón manual, autosave y salida) ──────────────
   // silent=true: guarda en segundo plano sin spinners ni mensajes.
   const persistSoap = useCallback(async (silent = false) => {
@@ -236,16 +269,17 @@ export default function AtenderCitaPage() {
     try {
       await dashboard.upsertConsultationNote(appointmentId, soapRef.current, token);
       dirtyRef.current.soap = false;
+      limpiarError("soap");
       if (!silent && mountedRef.current) {
         setSoapMsg("Nota guardada");
         setTimeout(() => { if (mountedRef.current) setSoapMsg(""); }, 2500);
       }
     } catch (err) {
-      if (mountedRef.current) setError(err instanceof Error ? err.message : "Error al guardar nota");
+      marcarError("soap", err, "Error al guardar nota");
     } finally {
       if (!silent && mountedRef.current) setSavingSoap(false);
     }
-  }, [appointmentId]);
+  }, [appointmentId, limpiarError, marcarError]);
 
   const persistVitals = useCallback(async (silent = false) => {
     const token = getToken();
@@ -259,16 +293,17 @@ export default function AtenderCitaPage() {
       }
       await dashboard.upsertVitalSigns(appointmentId, payload, token);
       dirtyRef.current.vitals = false;
+      limpiarError("vitals");
       if (!silent && mountedRef.current) {
         setVitalsMsg("Signos vitales guardados");
         setTimeout(() => { if (mountedRef.current) setVitalsMsg(""); }, 2500);
       }
     } catch (err) {
-      if (mountedRef.current) setError(err instanceof Error ? err.message : "Error al guardar signos vitales");
+      marcarError("vitals", err, "Error al guardar signos vitales");
     } finally {
       if (!silent && mountedRef.current) setSavingVitals(false);
     }
-  }, [appointmentId]);
+  }, [appointmentId, limpiarError, marcarError]);
 
   const persistRx = useCallback(async (silent = false) => {
     const token = getToken();
@@ -286,16 +321,17 @@ export default function AtenderCitaPage() {
         }));
       await dashboard.upsertPrescription(appointmentId, { items, notes: rxNotesRef.current }, token);
       dirtyRef.current.rx = false;
+      limpiarError("rx");
       if (!silent && mountedRef.current) {
         setRxMsg("Receta guardada");
         setTimeout(() => { if (mountedRef.current) setRxMsg(""); }, 2500);
       }
     } catch (err) {
-      if (mountedRef.current) setError(err instanceof Error ? err.message : "Error al guardar receta");
+      marcarError("rx", err, "Error al guardar receta");
     } finally {
       if (!silent && mountedRef.current) setSavingRx(false);
     }
-  }, [appointmentId]);
+  }, [appointmentId, limpiarError, marcarError]);
 
   const handleSaveSoap = () => persistSoap(false);
   const handleSaveVitals = () => persistVitals(false);
@@ -523,6 +559,29 @@ export default function AtenderCitaPage() {
       {error && (
         <div className="mb-4 p-3 rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm no-print">
           {error}
+        </div>
+      )}
+
+      {/* Error de guardado. Desaparece solo en cuanto esa seccion guarda bien,
+          y ofrece ir a la pestaña del dato que fallo. */}
+      {saveError && (
+        <div className="mb-4 p-3 rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm no-print flex items-start gap-3">
+          <span className="flex-1">{saveError.msg}</span>
+          {tab !== TAB_DE_SECCION[saveError.seccion] && (
+            <button
+              onClick={() => setTab(TAB_DE_SECCION[saveError.seccion])}
+              className="shrink-0 underline font-medium hover:text-red-900"
+            >
+              Ver
+            </button>
+          )}
+          <button
+            onClick={() => setSaveError(null)}
+            className="shrink-0 text-red-400 hover:text-red-700"
+            aria-label="Cerrar aviso"
+          >
+            ✕
+          </button>
         </div>
       )}
 
