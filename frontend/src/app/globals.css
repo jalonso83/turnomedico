@@ -48,3 +48,45 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* ── Impresión ────────────────────────────────────────────────────────────
+   La receta se imprime desde la pantalla de consulta con window.print().
+   La clase `.no-print` se usaba en esa página pero NUNCA estuvo definida a
+   nivel global, y el sidebar y la barra superior viven en el layout, fuera
+   del contenedor de la página: por eso salían impresos junto a la receta.
+
+   Aquí se define una sola vez, para cualquier página del panel que imprima. */
+@media print {
+  .no-print,
+  .no-print-wrapper > *:not(.print-only) {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Sin esto el area util queda con el ancho y el padding de la pantalla,
+     y la receta sale corrida hacia la derecha en el papel. */
+  .area-imprimible {
+    padding: 0 !important;
+    flex: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* El layout es flex con min-h-full; en papel eso no aplica y puede dejar
+     una primera hoja en blanco. */
+  body * {
+    box-shadow: none !important;
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}

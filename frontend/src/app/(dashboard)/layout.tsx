@@ -120,7 +120,8 @@ export default function DashboardLayout({
   return (
     <div className="min-h-full flex">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      {/* no-print: al imprimir una receta no debe salir el menu del sistema */}
+      <aside className="no-print w-64 bg-white border-r border-gray-200 flex flex-col">
         {/* Logo */}
         <div className="p-4 border-b border-gray-200">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -174,7 +175,7 @@ export default function DashboardLayout({
       {/* Main content area */}
       <div className="flex-1 flex flex-col bg-gray-50">
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+        <header className="no-print bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {loading ? (
               <>
@@ -207,7 +208,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="area-imprimible flex-1 p-6">{children}</main>
       </div>
     </div>
   );
