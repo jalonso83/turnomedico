@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ListOrdered,
@@ -261,19 +261,36 @@ export default function TurnosPage() {
     `Tu turno es el #${c.queuePosition}. ` +
     `Detalles: ${typeof window !== "undefined" ? window.location.origin : ""}/cita/${c.id}`;
 
+  /**
+   * Handle de la pestaña de WhatsApp, para reutilizarla en cada aviso.
+   *
+   * El intento anterior era `window.open(url, "turnomedico_whatsapp")`, confiando
+   * en que el NOMBRE de la pestaña la identificara. No funciona: `wa.me` redirige
+   * a `web.whatsapp.com`, y los navegadores **borran el nombre de la ventana en
+   * toda navegación cross-origin** (lo hacen desde 2020, para que el nombre no
+   * sirva de canal de rastreo entre sitios). Después del primer clic la pestaña
+   * ya no se llama así, el siguiente `window.open` no la encuentra, y abre otra.
+   *
+   * Guardar el handle sí funciona: la referencia sobrevive a la redirección.
+   * No se puede LEER su URL (cross-origin), pero sí ESCRIBIRLA, que es lo único
+   * que hace falta.
+   */
+  const waRef = useRef<Window | null>(null);
+
   const avisar = async (c: AgendaAppointment) => {
     const token = getToken();
     if (!token) return;
     const texto = mensajePara(c);
-    // Pestaña con nombre fijo: cada clic REUTILIZA la misma en vez de abrir
-    // una nueva. Con 20 pacientes, "_blank" dejaba 20 pestañas abiertas.
-    // El destino es un host fijo nuestro (wa.me), así que prescindir de
-    // noopener aquí no expone nada: hace falta el handle para enfocarla.
-    const wa = window.open(
-      `https://wa.me/${telefonoWa(c.patient.phone)}?text=${encodeURIComponent(texto)}`,
-      "turnomedico_whatsapp",
-    );
-    wa?.focus();
+    const url = `https://wa.me/${telefonoWa(c.patient.phone)}?text=${encodeURIComponent(texto)}`;
+
+    // Con 20 pacientes, abrir una pestaña por cada uno era inusable.
+    if (waRef.current && !waRef.current.closed) {
+      waRef.current.location.href = url;
+    } else {
+      waRef.current = window.open(url, "turnomedico_whatsapp");
+    }
+    waRef.current?.focus();
+
     try {
       await dashboard.markNotified(c.id, texto, token);
       setCitas((prev) =>
