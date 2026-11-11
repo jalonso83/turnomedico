@@ -189,7 +189,7 @@ export default function CitaPage() {
           <div className="flex items-start gap-3">
             <User className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
             <div>
-              <p className="text-xs text-gray-500">Medico</p>
+              <p className="text-xs text-gray-500">Médico</p>
               <p className="text-sm font-medium text-gray-900">{appointment.doctorName}</p>
               {appointment.doctorSpecialty && (
                 <p className="text-xs text-gray-500">{appointment.doctorSpecialty}</p>
@@ -221,9 +221,9 @@ export default function CitaPage() {
               <Clock className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" strokeWidth={1.5} />
               <div>
                 <p className="text-xs text-gray-500">Tu turno</p>
-                <p className="text-sm font-medium text-amber-700">Pendiente de confirmacion</p>
+                <p className="text-sm font-medium text-amber-700">Pendiente de confirmación</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  El consultorio confirmara tu cita y te enviara tu numero por WhatsApp.
+                  El consultorio confirmará tu cita y te enviará tu número por WhatsApp.
                 </p>
               </div>
             </div>
@@ -248,7 +248,7 @@ export default function CitaPage() {
             <div className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
               <div>
-                <p className="text-xs text-gray-500">Direccion</p>
+                <p className="text-xs text-gray-500">Dirección</p>
                 <p className="text-sm font-medium text-gray-900">
                   {appointment.consultorioName && <>{appointment.consultorioName}<br /></>}
                   {appointment.address}
@@ -287,9 +287,9 @@ export default function CitaPage() {
               <div className="w-14 h-14 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
                 <AlertTriangle className="w-7 h-7 text-red-500" strokeWidth={1.5} />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">Cancelar cita?</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">¿Cancelar cita?</h3>
               <p className="text-sm text-gray-500">
-                Esta accion no se puede deshacer. Se cancelara tu cita del{" "}
+                Esta acción no se puede deshacer. Se cancelará tu cita del{" "}
                 {formatDate(appointment.date)}
                 {appointment.queuePosition != null && (
                   <> (turno #{appointment.queuePosition})</>
@@ -326,7 +326,7 @@ export default function CitaPage() {
                     Cancelando...
                   </>
                 ) : (
-                  "Si, cancelar"
+                  "Sí, cancelar"
                 )}
               </button>
             </div>

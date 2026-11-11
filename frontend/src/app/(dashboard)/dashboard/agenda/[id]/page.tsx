@@ -807,7 +807,7 @@ export default function AtenderCitaPage() {
           onCreated={(fecha) => {
             setShowFollowUp(false);
             setFollowUpMsg(
-              `Seguimiento agendado para el ${fecha}. La secretaria le asignara su turno.`,
+              `Seguimiento agendado para el ${fecha}. La secretaria le asignará su turno.`,
             );
           }}
         />

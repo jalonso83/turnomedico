@@ -63,7 +63,7 @@ export class StaffService {
 
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
-      throw new ConflictException('Ya existe una cuenta con este email');
+      throw new ConflictException('Ya existe una cuenta con este correo');
     }
 
     await this.assertQuota(tenantId);

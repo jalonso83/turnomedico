@@ -72,19 +72,19 @@ const STATUS_CONFIG: Record<
 > = {
   PENDING: { label: "Pendiente", bg: "bg-yellow-100", text: "text-yellow-800" },
   CONFIRMED: { label: "Confirmado", bg: "bg-blue-100", text: "text-blue-800" },
-  ARRIVED: { label: "Llego", bg: "bg-teal/10", text: "text-teal" },
+  ARRIVED: { label: "Llegó", bg: "bg-teal/10", text: "text-teal" },
   IN_PROGRESS: { label: "En consulta", bg: "bg-purple-100", text: "text-purple-800" },
   COMPLETED: { label: "Completado", bg: "bg-green-100", text: "text-green-800" },
   CANCELLED_PATIENT: { label: "Cancelado", bg: "bg-red-100", text: "text-red-700" },
   CANCELLED_DOCTOR: { label: "Cancelado", bg: "bg-red-100", text: "text-red-700" },
-  NO_SHOW: { label: "No asistio", bg: "bg-gray-100", text: "text-gray-600" },
+  NO_SHOW: { label: "No asistió", bg: "bg-gray-100", text: "text-gray-600" },
 };
 
 function getNextStatus(current: string): { status: string; label: string; icon: React.ElementType } | null {
   switch (current) {
     case "PENDING":
     case "CONFIRMED":
-      return { status: "ARRIVED", label: "Llego", icon: LogIn };
+      return { status: "ARRIVED", label: "Llegó", icon: LogIn };
     case "ARRIVED":
       return { status: "IN_PROGRESS", label: "En consulta", icon: Play };
     case "IN_PROGRESS":
@@ -201,7 +201,7 @@ export default function AgendaPage() {
       setShowWalkIn(false);
       await fetchAgenda();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear walk-in");
+      setError(err instanceof Error ? err.message : "Error al registrar el paciente sin cita");
     } finally {
       setWalkInLoading(false);
     }
@@ -285,7 +285,7 @@ export default function AgendaPage() {
       {/* Header */}
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-navy">Agenda del dia</h1>
+          <h1 className="text-2xl font-bold text-navy">Agenda del día</h1>
           <p className="text-sm text-gray-500 mt-0.5 capitalize">{today}</p>
         </div>
         <div className="flex gap-3">
@@ -294,14 +294,14 @@ export default function AgendaPage() {
             className="inline-flex items-center gap-2 border border-navy text-navy px-4 py-2 rounded-lg text-sm font-medium hover:bg-navy/5 transition-colors"
           >
             <Share2 className="w-4 h-4" strokeWidth={1.5} />
-            Compartir link
+            Compartir enlace
           </button>
           <button
             onClick={() => setShowWalkIn(true)}
             className="inline-flex items-center gap-2 bg-navy text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-navy-dark transition-colors"
           >
             <UserPlus className="w-4 h-4" strokeWidth={1.5} />
-            Walk-in
+            Paciente sin cita
           </button>
         </div>
       </div>
@@ -321,7 +321,7 @@ export default function AgendaPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-navy">Registrar Walk-in</h3>
+              <h3 className="text-lg font-semibold text-navy">Registrar paciente sin cita</h3>
               <button onClick={() => setShowWalkIn(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
@@ -363,7 +363,7 @@ export default function AgendaPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                 <input
                   type="tel"
                   value={walkInPhone}
@@ -458,7 +458,7 @@ export default function AgendaPage() {
                   Estado
                 </th>
                 <th className="text-right text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
-                  Accion
+                  Acción
                 </th>
               </tr>
             </thead>
@@ -574,7 +574,7 @@ export default function AgendaPage() {
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay citas para hoy</h3>
           <p className="text-sm text-gray-500 max-w-md mx-auto mb-6">
-            Configura tu horario de atencion y comparte tu link de TurnoMedico para que tus pacientes agenden sus citas.
+            Configura tu horario de atención y comparte tu enlace de TurnoMedico para que tus pacientes agenden sus citas.
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link
@@ -589,7 +589,7 @@ export default function AgendaPage() {
               className="inline-flex items-center gap-2 border border-navy text-navy px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-navy/5 transition-colors"
             >
               <Share2 className="w-4 h-4" strokeWidth={1.5} />
-              Compartir link
+              Compartir enlace
             </button>
           </div>
         </div>

@@ -619,7 +619,7 @@ export class AppointmentsService {
         queuePosition: appointment.queuePosition,
         patient: appointment.patient,
       },
-      message: 'Paciente walk-in registrado',
+      message: 'Paciente sin cita registrado',
     };
   }
 

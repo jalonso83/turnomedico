@@ -187,19 +187,19 @@ export default function HomePage() {
                 icon: <Bell className="w-8 h-8 text-teal" strokeWidth={1.5} />,
                 title: "Recordatorios automáticos",
                 desc: "Notificaciones 24h y 1h antes de la cita. El paciente confirma o cancela con un toque, liberando el espacio para otro.",
-                highlight: "Reduce no-shows hasta un 60%",
+                highlight: "Reduce las inasistencias hasta un 60%",
               },
               {
                 icon: <MousePointerClick className="w-8 h-8 text-teal" strokeWidth={1.5} />,
                 title: "Gestión con un solo clic",
                 desc: "La secretaria toca [LLEGÓ] → [EN CONSULTA] → [SIGUIENTE]. Sin formularios. Sin complicaciones. 3 botones, eso es todo.",
-                highlight: "Walk-in en 15 segundos",
+                highlight: "Paciente sin cita en 15 segundos",
               },
               {
                 icon: <BarChart3 className="w-8 h-8 text-teal" strokeWidth={1.5} />,
                 title: "Métricas de tu consulta",
-                desc: "Pacientes por día, tasa de no-show, tiempo promedio de espera, horas pico. Datos que antes no tenías para tomar mejores decisiones.",
-                highlight: "Dashboard en tiempo real",
+                desc: "Pacientes por día, tasa de inasistencia, tiempo promedio de espera, horas pico. Datos que antes no tenías para tomar mejores decisiones.",
+                highlight: "Panel en tiempo real",
               },
               {
                 icon: <UserSearch className="w-8 h-8 text-teal" strokeWidth={1.5} />,
@@ -326,9 +326,9 @@ export default function HomePage() {
               <p className="text-sm font-medium text-green-600 uppercase tracking-wider mb-6">Si eres médico</p>
               <div className="space-y-6 flex-1">
                 {[
-                  { step: "1", title: "Regístrate gratis", desc: "Email, nombre, especialidad y ciudad. En 2 minutos tienes tu perfil activo." },
+                  { step: "1", title: "Regístrate gratis", desc: "Correo, nombre, especialidad y ciudad. En 2 minutos tienes tu perfil activo." },
                   { step: "2", title: "Configura tu horario", desc: "Define tus días, horas, duración de cita y descansos. Si un día no trabajas, lo bloqueas." },
-                  { step: "3", title: "Comparte tu link", desc: "Tus pacientes agendan desde tu link personalizado. Tu secretaria gestiona desde el dashboard." },
+                  { step: "3", title: "Comparte tu enlace", desc: "Tus pacientes agendan desde tu enlace personalizado. Tu secretaria gestiona desde el panel." },
                 ].map((item) => (
                   <div key={item.step} className="flex gap-4">
                     <div className="w-10 h-10 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold text-sm shrink-0">
@@ -374,7 +374,7 @@ export default function HomePage() {
                 price: "RD$0",
                 period: "Siempre gratis",
                 desc: "Para probar sin compromiso",
-                features: ["30 citas/mes máximo", "Agenda básica", "1 secretaria", "Recordatorios por email"],
+                features: ["30 citas/mes máximo", "Agenda básica", "1 secretaria", "Recordatorios por correo"],
                 cta: "Empezar gratis",
                 ctaStyle: "border-2 border-gray-300 text-gray-700 hover:bg-gray-50",
                 highlight: false,
@@ -516,11 +516,11 @@ export default function HomePage() {
               },
               {
                 q: "¿Cómo recibe el paciente los recordatorios?",
-                a: "Por notificación push (si instala la app) o por SMS. También por email. El sistema envía recordatorios 24 horas y 1 hora antes de cada cita.",
+                a: "Por notificación push (si instala la app) o por SMS. También por correo. El sistema envía recordatorios 24 horas y 1 hora antes de cada cita.",
               },
               {
                 q: "¿Qué pasa con los pacientes que ya tengo en mi libreta?",
-                a: "Puedes agregarlos como walk-in directamente desde el dashboard. También puedes compartirles tu link de TurnoMedico para que agenden ellos mismos la próxima vez.",
+                a: "Puedes agregarlos como pacientes sin cita directamente desde el panel. También puedes compartirles tu enlace de TurnoMedico para que agenden ellos mismos la próxima vez.",
               },
               {
                 q: "¿La secretaria necesita capacitación?",

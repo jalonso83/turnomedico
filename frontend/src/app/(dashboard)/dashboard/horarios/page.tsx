@@ -368,7 +368,7 @@ export default function HorariosPage() {
       setBlockFrom("");
       setBlockTo("");
       setNewBlockReason("");
-      showSuccess(blockFrom === to ? "Dia bloqueado." : "Rango bloqueado.");
+      showSuccess(blockFrom === to ? "Día bloqueado." : "Rango bloqueado.");
     } catch (err) {
       showError(err instanceof Error ? err.message : "Error al bloquear.");
     } finally {
@@ -386,7 +386,7 @@ export default function HorariosPage() {
     try {
       await Promise.all(ids.map((id) => dashboard.deleteOverride(id, token)));
       setOverrides((prev) => prev.filter((o) => !ids.includes(o.id)));
-      showSuccess(ids.length > 1 ? "Rango desbloqueado." : "Dia desbloqueado.");
+      showSuccess(ids.length > 1 ? "Rango desbloqueado." : "Día desbloqueado.");
     } catch (err) {
       showError(err instanceof Error ? err.message : "Error al desbloquear.");
     }
@@ -400,7 +400,7 @@ export default function HorariosPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-navy">Configurar Horarios</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Define los dias y horas en que atiendes. Los pacientes podran agendar
+          Define los días y horas en que atiendes. Los pacientes podrán agendar
           solo en los horarios que habilites.
         </p>
       </div>
@@ -446,7 +446,7 @@ export default function HorariosPage() {
           <p className="text-xs text-gray-500 mt-0.5">
             {agendaActive
               ? "Tu agenda es visible para los pacientes"
-              : "Tu agenda no es visible para pacientes aun"}
+              : "Tu agenda no es visible para pacientes aún"}
           </p>
         </div>
         <button
@@ -470,8 +470,8 @@ export default function HorariosPage() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex gap-3">
           <Info className="w-5 h-5 text-navy shrink-0 mt-0.5" />
           <p className="text-sm text-gray-700">
-            Tu agenda no es visible para pacientes aun. Configura tus horarios y
-            activala cuando estes listo.
+            Tu agenda no es visible para pacientes aún. Configura tus horarios y
+            actívala cuando estés listo.
           </p>
         </div>
       )}
@@ -700,9 +700,9 @@ export default function HorariosPage() {
 
       {/* ── Blocked dates section ──────────────────────────────── */}
       <div className="border-t border-gray-200 pt-8">
-        <h2 className="text-xl font-bold text-navy mb-1">Dias bloqueados</h2>
+        <h2 className="text-xl font-bold text-navy mb-1">Días bloqueados</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Bloquea un rango de dias de una vez (vacaciones, congresos) o un dia suelto.
+          Bloquea un rango de días de una vez (vacaciones, congresos) o un día suelto.
         </p>
 
         {/* Add block form (range) */}
@@ -725,7 +725,7 @@ export default function HorariosPage() {
             <div className="flex-1">
               <label className="block text-xs text-gray-500 mb-1">
                 Hasta{" "}
-                <span className="text-gray-400 font-normal">(opcional, 1 dia si vacio)</span>
+                <span className="text-gray-400 font-normal">(opcional, 1 día si vacío)</span>
               </label>
               <input
                 type="date"
@@ -765,7 +765,7 @@ export default function HorariosPage() {
         {/* Blocked dates list (grouped into ranges) */}
         {overrides.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-500 text-sm">
-            No hay dias bloqueados
+            No hay días bloqueados
           </div>
         ) : (
           <div className="space-y-2">
@@ -781,7 +781,7 @@ export default function HorariosPage() {
                       {isRange ? (
                         <>
                           {formatDay(g.from)} <span className="text-gray-400">al</span> {formatDay(g.to)}
-                          <span className="text-gray-400 font-normal"> ({g.ids.length} dias)</span>
+                          <span className="text-gray-400 font-normal"> ({g.ids.length} días)</span>
                         </>
                       ) : (
                         formatDay(g.from)

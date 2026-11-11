@@ -153,9 +153,9 @@ export default function PacientesPage() {
     CONFIRMED: "Confirmado",
     CANCELLED_PATIENT: "Cancelado",
     CANCELLED_DOCTOR: "Cancelado",
-    NO_SHOW: "No asistio",
+    NO_SHOW: "No asistió",
     IN_PROGRESS: "En consulta",
-    ARRIVED: "Llego",
+    ARRIVED: "Llegó",
     PENDING: "Pendiente",
   };
 
@@ -203,7 +203,7 @@ export default function PacientesPage() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" strokeWidth={1.5} />
         <input
           type="text"
-          placeholder="Buscar por nombre o telefono..."
+          placeholder="Buscar por nombre o teléfono..."
           value={search}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal focus:border-teal outline-none transition-colors"
@@ -223,10 +223,10 @@ export default function PacientesPage() {
                     decide el contenido y las columnas se mueven de una carga a
                     otra segun el largo de los telefonos o las fechas. */}
                 <th className="w-44 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
-                  Telefono
+                  Teléfono
                 </th>
                 <th className="w-44 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
-                  Ultima visita
+                  Última visita
                 </th>
                 <th className="w-36 text-left text-xs font-semibold text-navy uppercase tracking-wider px-6 py-3">
                   Total visitas
@@ -400,12 +400,12 @@ export default function PacientesPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
             {search
               ? "No se encontraron pacientes"
-              : "Aun no tienes pacientes registrados"}
+              : "Aún no tienes pacientes registrados"}
           </h3>
           <p className="text-sm text-gray-500 max-w-md mx-auto">
             {search
-              ? "Intenta con otro nombre o numero de telefono."
-              : "Cuando tus pacientes agenden citas o los registres como walk-in, apareceran aqui con su historial de visitas."}
+              ? "Intenta con otro nombre o número de teléfono."
+              : "Cuando tus pacientes agenden citas o los registres como pacientes sin cita, aparecerán aquí con su historial de visitas."}
           </p>
         </div>
       )}

@@ -736,7 +736,7 @@ function SecretaryPatientBasic() {
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Cedula</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Cédula</label>
             <input value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} className={inputClass} placeholder="000-0000000-0" />
           </div>
           <div>
@@ -752,7 +752,7 @@ function SecretaryPatientBasic() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Direccion</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
             <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputClass} />
           </div>
         </div>

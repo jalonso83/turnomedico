@@ -51,7 +51,7 @@ export default function OnboardingPage() {
       return;
     }
     if (!form.address.trim()) {
-      setError("Ingresa la direccion de tu consultorio.");
+      setError("Ingresa la dirección de tu consultorio.");
       return;
     }
     if (!form.city) {
@@ -177,7 +177,7 @@ export default function OnboardingPage() {
                 Datos del consultorio
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                Paso 1 de 2 — Informacion de tu consultorio
+                Paso 1 de 2 — Información de tu consultorio
               </p>
             </div>
 
@@ -199,13 +199,13 @@ export default function OnboardingPage() {
                     updateField("consultorioName", e.target.value)
                   }
                   className={inputClass}
-                  placeholder="Centro Medico San Rafael"
+                  placeholder="Centro Médico San Rafael"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Direccion
+                  Dirección
                 </label>
                 <input
                   type="text"
@@ -317,11 +317,11 @@ export default function OnboardingPage() {
             <CheckCircle className="w-16 h-16 text-teal mx-auto mb-4" />
 
             <h1 className="text-2xl font-bold text-navy mb-2">
-              Felicidades! Tu consultorio esta registrado
+              ¡Felicidades! Tu consultorio está registrado
             </h1>
 
             <p className="text-gray-500 text-sm mb-6">
-              Comparte este link con tus pacientes para que agenden cita
+              Comparte este enlace con tus pacientes para que agenden cita
               directamente
             </p>
 
@@ -355,10 +355,10 @@ export default function OnboardingPage() {
                 <Info className="w-5 h-5 text-navy shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-navy">
-                    Proximo paso
+                    Próximo paso
                   </p>
                   <p className="text-sm text-gray-600 mt-1">
-                    Configura tus horarios de atencion en el dashboard para
+                    Configura tus horarios de atención en tu panel para
                     activar tu agenda
                   </p>
                 </div>
@@ -378,7 +378,7 @@ export default function OnboardingPage() {
                 href="/dashboard"
                 className="block w-full py-3 text-teal font-semibold hover:text-teal-dark transition-colors text-center"
               >
-                Ir al dashboard
+                Ir a mi panel
               </Link>
             </div>
           </div>

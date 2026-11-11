@@ -18,7 +18,7 @@ export class SmsService {
 
   async sendOtp(to: string, otp: string): Promise<boolean> {
     // TODO: Send OTP message with formatted text
-    const message = `TurnoMedico: Tu codigo de verificacion es ${otp}. Expira en 5 minutos.`;
+    const message = `TurnoMedico: Tu código de verificación es ${otp}. Expira en 5 minutos.`;
     return this.send(to, message);
   }
 }

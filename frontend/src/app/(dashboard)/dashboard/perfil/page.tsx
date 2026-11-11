@@ -326,7 +326,7 @@ export default function PerfilPage() {
               <ExternalLink className="w-5 h-5 text-teal" strokeWidth={1.5} />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-navy">Tu link público</h2>
+              <h2 className="text-sm font-semibold text-navy">Tu enlace público</h2>
               <p className="text-xs text-gray-500">Comparte este enlace con tus pacientes</p>
             </div>
           </div>

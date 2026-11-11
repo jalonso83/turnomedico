@@ -73,7 +73,7 @@ interface DayAvailability {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
-const DAY_NAMES_SHORT = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"];
+const DAY_NAMES_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const MONTH_NAMES_SHORT = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
@@ -226,11 +226,11 @@ export default function DoctorProfilePage() {
       return;
     }
     if (!patientPhone.trim()) {
-      setFormError("Ingresa tu numero de telefono");
+      setFormError("Ingresa tu número de teléfono");
       return;
     }
     if (!isValidDominicanPhone(patientPhone)) {
-      setFormError("Numero invalido. Usa formato dominicano: 809-000-0000");
+      setFormError("Número inválido. Usa formato dominicano: 809-000-0000");
       return;
     }
     if (!selectedDate) {
@@ -299,7 +299,7 @@ export default function DoctorProfilePage() {
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" strokeWidth={1.5} />
         <h2 className="text-xl font-semibold text-gray-900 mb-2">No se pudo cargar el perfil</h2>
-        <p className="text-sm text-gray-500 mb-6">{profileError || "Medico no encontrado"}</p>
+        <p className="text-sm text-gray-500 mb-6">{profileError || "Médico no encontrado"}</p>
         <Link
           href="/buscar"
           className="inline-flex items-center gap-2 text-sm text-teal hover:underline"
@@ -323,17 +323,17 @@ export default function DoctorProfilePage() {
               Decir "confirmada" aqui contradecia al propio recuadro de abajo,
               que dice que el consultorio la confirmara. */}
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Solicitud enviada!
+            ¡Solicitud enviada!
           </h2>
           <p className="text-sm text-gray-500 mb-6">
-            El consultorio la revisara y te confirmara por WhatsApp
+            El consultorio la revisará y te confirmará por WhatsApp
           </p>
 
           <div className="bg-gray-50 rounded-xl p-5 text-left space-y-3 mb-6">
             <div className="flex items-start gap-3">
               <User className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
               <div>
-                <p className="text-xs text-gray-500">Medico</p>
+                <p className="text-xs text-gray-500">Médico</p>
                 <p className="text-sm font-medium text-gray-900">{confirmation.doctorName}</p>
               </div>
             </div>
@@ -357,9 +357,9 @@ export default function DoctorProfilePage() {
               <Info className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
               <div>
                 <p className="text-xs text-gray-500">Estado</p>
-                <p className="text-sm font-medium text-amber-700">Pendiente de confirmacion</p>
+                <p className="text-sm font-medium text-amber-700">Pendiente de confirmación</p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  El consultorio confirmara tu cita y te enviara tu numero de turno por WhatsApp.
+                  El consultorio confirmará tu cita y te enviará tu número de turno por WhatsApp.
                 </p>
               </div>
             </div>
@@ -380,7 +380,7 @@ export default function DoctorProfilePage() {
               <div className="flex items-start gap-3">
                 <MapPin className="w-4 h-4 text-teal mt-0.5 shrink-0" strokeWidth={1.5} />
                 <div>
-                  <p className="text-xs text-gray-500">Direccion</p>
+                  <p className="text-xs text-gray-500">Dirección</p>
                   <p className="text-sm font-medium text-gray-900">
                     {doctor.address}
                     {doctor.floor ? `, Piso ${doctor.floor}` : ""}
@@ -667,7 +667,7 @@ export default function DoctorProfilePage() {
                   <div className="flex items-start gap-3 pl-8">
                     <Info className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" strokeWidth={1.5} />
                     <p className="text-xs text-gray-600">
-                      Se atiende por orden de turno (no por hora). El consultorio confirma tu cita y te envia tu numero por WhatsApp.
+                      Se atiende por orden de turno (no por hora). El consultorio confirma tu cita y te envía tu número por WhatsApp.
                     </p>
                   </div>
                   {!showForm && (
@@ -744,13 +744,13 @@ export default function DoctorProfilePage() {
                   type="text"
                   value={patientName}
                   onChange={(e) => setPatientName(e.target.value)}
-                  placeholder="Juan Perez"
+                  placeholder="Juan Pérez"
                   className="w-full border border-gray-300 rounded-lg px-4 py-3 text-sm focus:ring-2 focus:ring-teal focus:border-teal outline-none transition-colors"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Numero de telefono
+                  Número de teléfono
                 </label>
                 <input
                   type="tel"

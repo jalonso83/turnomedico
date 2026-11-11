@@ -7,7 +7,7 @@ export enum AppointmentReasonEnum {
 }
 
 export class BookAppointmentDto {
-  @ApiProperty({ example: 'Maria Lopez' })
+  @ApiProperty({ example: 'María López' })
   @IsString()
   @IsNotEmpty()
   patientName: string;

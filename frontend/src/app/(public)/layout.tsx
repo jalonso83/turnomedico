@@ -24,13 +24,13 @@ export default function PublicLayout({
               href="/buscar"
               className="text-sm text-gray-600 hover:text-teal transition-colors"
             >
-              Buscar medico
+              Buscar médico
             </Link>
             <Link
               href="/login"
               className="text-sm bg-navy text-white px-4 py-2 rounded-lg hover:bg-navy-dark transition-colors"
             >
-              Soy medico
+              Soy médico
             </Link>
           </nav>
         </div>
@@ -38,10 +38,10 @@ export default function PublicLayout({
       <main className="flex-1">{children}</main>
       <footer className="bg-gray-900 text-gray-400 py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-sm">
-          <p>TurnoMedico -- Tu turno medico, sin esperas</p>
-          <p className="mt-1">Republica Dominicana</p>
+          <p>TurnoMedico: tu turno médico, sin esperas</p>
+          <p className="mt-1">República Dominicana</p>
           <p className="mt-3 text-gray-600 text-xs">
-            TurnoMedico no es un centro medico ni ofrece servicios de salud. Es una plataforma tecnologica de gestion de turnos.
+            TurnoMedico no es un centro médico ni ofrece servicios de salud. Es una plataforma tecnológica de gestión de turnos.
           </p>
         </div>
       </footer>

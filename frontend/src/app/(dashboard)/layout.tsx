@@ -26,14 +26,14 @@ const ALL_NAV_ITEMS: {
   icon: typeof Calendar;
   secretary: NavVisibility;
 }[] = [
-  { href: "/dashboard", label: "Agenda del dia", icon: Calendar, secretary: true },
+  { href: "/dashboard", label: "Agenda del día", icon: Calendar, secretary: true },
   { href: "/dashboard/turnos", label: "Turnos", icon: ListOrdered, secretary: true },
   { href: "/dashboard/caja", label: "Caja", icon: Banknote, secretary: true },
   { href: "/dashboard/pacientes", label: "Pacientes", icon: Users, secretary: true },
   { href: "/dashboard/horarios", label: "Horarios", icon: Clock, secretary: "schedule" },
   { href: "/dashboard/servicios", label: "Servicios", icon: ClipboardList, secretary: false },
   { href: "/dashboard/perfil", label: "Mi perfil", icon: UserCircle, secretary: false },
-  { href: "/dashboard/configuracion", label: "Configuracion", icon: Settings, secretary: false },
+  { href: "/dashboard/configuracion", label: "Configuración", icon: Settings, secretary: false },
 ];
 
 /** Rutas que la secretaria PUEDE abrir (todo lo demás se redirige a /dashboard). */
@@ -134,7 +134,7 @@ export default function DashboardLayout({
             />
           </Link>
           <p className="text-xs text-gray-500 mt-1">
-            {isSecretary ? "Panel de recepcion" : "Panel del consultorio"}
+            {isSecretary ? "Panel de recepción" : "Panel del consultorio"}
           </p>
         </div>
 
@@ -167,7 +167,7 @@ export default function DashboardLayout({
             className="flex items-center gap-3 w-full text-left text-sm text-gray-500 hover:text-red-600 px-3 py-2.5 rounded-lg hover:bg-red-50 transition-colors"
           >
             <LogOut className="w-5 h-5" strokeWidth={1.5} />
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </aside>

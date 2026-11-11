@@ -62,7 +62,7 @@ export default function RegistroPage() {
     }
 
     if (!validateEmail(stepOne.email)) {
-      setError("Ingresa un email válido.");
+      setError("Ingresa un correo válido.");
       return;
     }
 
@@ -227,7 +227,7 @@ export default function RegistroPage() {
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
+                Correo electrónico
               </label>
               <input
                 type="email"
@@ -236,7 +236,7 @@ export default function RegistroPage() {
                   setStepOne({ ...stepOne, email: e.target.value })
                 }
                 className={inputClass}
-                placeholder="doctor@email.com"
+                placeholder="doctor@correo.com"
                 autoComplete="email"
               />
             </div>

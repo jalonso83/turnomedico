@@ -114,7 +114,7 @@ export default function ConfiguracionPage() {
         }
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : "Error al cargar configuracion");
+        setError(err instanceof Error ? err.message : "Error al cargar la configuración");
       })
       .finally(() => setLoading(false));
   }, [router]);
@@ -141,10 +141,10 @@ export default function ConfiguracionPage() {
         },
         token
       );
-      setSuccessMsg("Configuracion guardada correctamente");
+      setSuccessMsg("Configuración guardada correctamente");
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al guardar configuracion");
+      setError(err instanceof Error ? err.message : "Error al guardar la configuración");
       setTimeout(() => setError(""), 5000);
     } finally {
       setSaving(false);
@@ -166,7 +166,7 @@ export default function ConfiguracionPage() {
       return;
     }
     if (!newStaff.name.trim() || !newStaff.email.trim() || newStaff.password.length < 6) {
-      setStaffError("Completa nombre, email y una contrasena de al menos 6 caracteres");
+      setStaffError("Completa nombre, correo y una contraseña de al menos 6 caracteres");
       setTimeout(() => setStaffError(""), 5000);
       return;
     }
@@ -184,7 +184,7 @@ export default function ConfiguracionPage() {
         },
         token,
       );
-      setStaffMsg("Secretaria creada. Entregale su email y contrasena temporal.");
+      setStaffMsg("Secretaria creada. Entrégale su correo y contraseña temporal.");
       setNewStaff({ name: "", email: "", password: "", canManageSchedule: true });
       await reloadStaff(token);
       setTimeout(() => setStaffMsg(""), 5000);
@@ -246,9 +246,9 @@ export default function ConfiguracionPage() {
     <div className="max-w-3xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-navy">Configuracion</h1>
+        <h1 className="text-2xl font-bold text-navy">Configuración</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          Personaliza tu consultorio, equipo y suscripcion
+          Personaliza tu consultorio, equipo y suscripción
         </p>
       </div>
 
@@ -285,7 +285,7 @@ export default function ConfiguracionPage() {
                 value={displayConfig.displayName}
                 onChange={(e) => setDisplayConfig({ ...displayConfig, displayName: e.target.value })}
                 className={inputClass}
-                placeholder="Consultorio Dr. Garcia Perez"
+                placeholder="Consultorio Dr. García Pérez"
               />
             </div>
             <div>
@@ -367,8 +367,8 @@ export default function ConfiguracionPage() {
               <div>
                 <h2 className="text-sm font-semibold text-navy">Equipo</h2>
                 <p className="text-xs text-gray-500">
-                  Tu secretaria puede ver la agenda, cobrar y editar datos basicos del
-                  paciente. No ve el expediente clinico.
+                  Tu secretaria puede ver la agenda, cobrar y editar datos básicos del
+                  paciente. No ve el expediente clínico.
                 </p>
               </div>
             </div>
@@ -413,8 +413,8 @@ export default function ConfiguracionPage() {
                       onClick={() => handleToggleSchedule(sec)}
                       title={
                         sec.canManageSchedule
-                          ? "Puede editar tu horario (click para quitar)"
-                          : "No puede editar tu horario (click para permitir)"
+                          ? "Puede editar tu horario (clic para quitar)"
+                          : "No puede editar tu horario (clic para permitir)"
                       }
                       className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors ${
                         sec.canManageSchedule
@@ -442,7 +442,7 @@ export default function ConfiguracionPage() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500 mb-5">No tienes secretarias registradas aun.</p>
+            <p className="text-sm text-gray-500 mb-5">No tienes secretarias registradas aún.</p>
           )}
 
           {/* Create secretary form */}
@@ -460,7 +460,7 @@ export default function ConfiguracionPage() {
                 type="email"
                 value={newStaff.email}
                 onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                placeholder="Email"
+                placeholder="Correo electrónico"
                 className={inputClass}
               />
             </div>
@@ -468,7 +468,7 @@ export default function ConfiguracionPage() {
               type="text"
               value={newStaff.password}
               onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
-              placeholder="Contrasena temporal (min. 6 caracteres)"
+              placeholder="Contraseña temporal (mín. 6 caracteres)"
               className={`${inputClass} mb-3`}
             />
             <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
@@ -502,8 +502,8 @@ export default function ConfiguracionPage() {
               <CreditCard className="w-5 h-5 text-teal" strokeWidth={1.5} />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-navy">Suscripcion</h2>
-              <p className="text-xs text-gray-500">Tu plan actual y facturacion</p>
+              <h2 className="text-sm font-semibold text-navy">Suscripción</h2>
+              <p className="text-xs text-gray-500">Tu plan actual y facturación</p>
             </div>
           </div>
 
@@ -534,7 +534,7 @@ export default function ConfiguracionPage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Desactivar mi cuenta</p>
               <p className="text-xs text-gray-500 mt-0.5">
-                Tu perfil publico sera removido y los pacientes no podran agendar.
+                Tu perfil público será removido y los pacientes no podrán agendar.
               </p>
             </div>
             <button className="text-sm font-medium text-red-600 border border-red-300 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors">
@@ -555,7 +555,7 @@ export default function ConfiguracionPage() {
             ) : (
               <Save className="w-4 h-4" strokeWidth={1.5} />
             )}
-            {saving ? "Guardando..." : "Guardar configuracion"}
+            {saving ? "Guardando..." : "Guardar configuración"}
           </button>
         </div>
       </div>
