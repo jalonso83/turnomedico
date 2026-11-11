@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ListOrdered,
@@ -262,34 +262,42 @@ export default function TurnosPage() {
     `Detalles: ${typeof window !== "undefined" ? window.location.origin : ""}/cita/${c.id}`;
 
   /**
-   * Handle de la pestaña de WhatsApp, para reutilizarla en cada aviso.
+   * Dónde se abre el aviso: la app de WhatsApp instalada, o WhatsApp Web.
    *
-   * El intento anterior era `window.open(url, "turnomedico_whatsapp")`, confiando
-   * en que el NOMBRE de la pestaña la identificara. No funciona: `wa.me` redirige
-   * a `web.whatsapp.com`, y los navegadores **borran el nombre de la ventana en
-   * toda navegación cross-origin** (lo hacen desde 2020, para que el nombre no
-   * sirva de canal de rastreo entre sitios). Después del primer clic la pestaña
-   * ya no se llama así, el siguiente `window.open` no la encuentra, y abre otra.
+   * Desde la web NO se puede reutilizar una pestaña de WhatsApp Web. Se probó por
+   * nombre de ventana y luego guardando el handle de `window.open`; ninguno sirve
+   * porque api.whatsapp.com y web.whatsapp.com responden con
+   * `Cross-Origin-Opener-Policy: same-origin`, que corta el vínculo con la
+   * pestaña: el handle pasa a `closed === true` y cada aviso abre otra.
    *
-   * Guardar el handle sí funciona: la referencia sobrevive a la redirección.
-   * No se puede LEER su URL (cross-origin), pero sí ESCRIBIRLA, que es lo único
-   * que hace falta.
+   * `whatsapp://send` abre la app de escritorio y no crea pestañas. Por eso es el
+   * modo por defecto; WhatsApp Web queda para quien no tenga la app.
    */
-  const waRef = useRef<Window | null>(null);
+  const [modoWa, setModoWa] = useState<"app" | "web">("app");
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("turnomedico_modo_wa") === "web") setModoWa("web");
+    } catch {}
+  }, []);
+  const cambiarModoWa = (m: "app" | "web") => {
+    setModoWa(m);
+    try {
+      localStorage.setItem("turnomedico_modo_wa", m);
+    } catch {}
+  };
 
   const avisar = async (c: AgendaAppointment) => {
     const token = getToken();
     if (!token) return;
     const texto = mensajePara(c);
-    const url = `https://wa.me/${telefonoWa(c.patient.phone)}?text=${encodeURIComponent(texto)}`;
+    const telefono = telefonoWa(c.patient.phone);
 
-    // Con 20 pacientes, abrir una pestaña por cada uno era inusable.
-    if (waRef.current && !waRef.current.closed) {
-      waRef.current.location.href = url;
+    if (modoWa === "app") {
+      // Un enlace de protocolo no navega la página: solo le pasa el chat a la app.
+      window.location.href = `whatsapp://send?phone=${telefono}&text=${encodeURIComponent(texto)}`;
     } else {
-      waRef.current = window.open(url, "turnomedico_whatsapp");
+      window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(texto)}`, "_blank");
     }
-    waRef.current?.focus();
 
     try {
       await dashboard.markNotified(c.id, texto, token);
@@ -504,8 +512,34 @@ export default function TurnosPage() {
           </div>
           <p className="text-xs text-gray-400 mt-2">
             A quien ya tiene turno no se le cambia el número: si vuelves a confirmar, solo se
-            numeran las citas nuevas. Los avisos se abren siempre en la misma pestaña de
-            WhatsApp.
+            numeran las citas nuevas.
+          </p>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span>Abrir los avisos en:</span>
+            {(
+              [
+                ["app", "App de WhatsApp"],
+                ["web", "WhatsApp Web"],
+              ] as const
+            ).map(([m, etiqueta]) => (
+              <button
+                key={m}
+                onClick={() => cambiarModoWa(m)}
+                className={`px-2.5 py-1 rounded-full border ${
+                  modoWa === m
+                    ? "border-green-600 bg-green-50 text-green-700"
+                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            {modoWa === "app"
+              ? "Cada aviso se abre en la app de WhatsApp de esta computadora, sin abrir pestañas. La primera vez el navegador pide permiso: marca \"Permitir siempre\"."
+              : "WhatsApp Web abre una pestaña nueva por cada aviso; WhatsApp no permite reutilizarla. Si tienes la app instalada, usa la otra opción."}
           </p>
         </>
       )}
