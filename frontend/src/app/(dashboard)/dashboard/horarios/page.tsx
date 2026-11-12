@@ -112,12 +112,39 @@ function timeToMin(t: string): number {
   return h * 60 + m;
 }
 
+/**
+ * Minutos de consulta del día. Del descanso solo se resta la parte que cae
+ * DENTRO del horario: un descanso de 16:00 a 17:00 en un horario de 9:00 a
+ * 10:00 no le quita nada (antes restaba la hora entera y dejaba 0 minutos).
+ */
 function availableMinutes(day: DaySchedule): number {
-  const total = timeToMin(day.endTime) - timeToMin(day.startTime);
+  const inicio = timeToMin(day.startTime);
+  const fin = timeToMin(day.endTime);
+  const total = fin - inicio;
   if (total <= 0) return 0;
   if (day.noBreak) return total;
-  const breakMin = timeToMin(day.breakEnd) - timeToMin(day.breakStart);
-  return Math.max(0, total - Math.max(0, breakMin));
+  const solape =
+    Math.min(fin, timeToMin(day.breakEnd)) - Math.max(inicio, timeToMin(day.breakStart));
+  return total - Math.max(0, solape);
+}
+
+/** Errores del horario en sí, independientes de los cupos. */
+function problemaHorario(day: DaySchedule): string | null {
+  if (!day.enabled) return null;
+  if (timeToMin(day.endTime) <= timeToMin(day.startTime)) {
+    return "La hora de fin debe ser posterior a la hora de inicio.";
+  }
+  if (day.noBreak) return null;
+  if (timeToMin(day.breakEnd) <= timeToMin(day.breakStart)) {
+    return "El descanso debe terminar después de empezar.";
+  }
+  if (
+    timeToMin(day.breakStart) < timeToMin(day.startTime) ||
+    timeToMin(day.breakEnd) > timeToMin(day.endTime)
+  ) {
+    return `El descanso (${day.breakStart} a ${day.breakEnd}) está fuera del horario de trabajo (${day.startTime} a ${day.endTime}). Revísalo o marca "Sin descanso".`;
+  }
+  return null;
 }
 
 interface CapacityAlert {
@@ -130,7 +157,14 @@ interface CapacityAlert {
 function evaluateCapacity(day: DaySchedule, thresholdMin: number): CapacityAlert | null {
   if (!day.enabled || day.maxAppointments == null || day.maxAppointments <= 0) return null;
   const mins = availableMinutes(day);
-  if (mins <= 0) return null;
+  if (mins <= 0) {
+    return {
+      level: "error",
+      minutesPerPatient: 0,
+      threshold: thresholdMin,
+      message: `No queda tiempo de consulta para ${day.maxAppointments} cupos. Revisa el horario y el descanso.`,
+    };
+  }
   const perPatient = Math.floor(mins / day.maxAppointments);
   const warnAt = thresholdMin;
   const errorAt = Math.floor(thresholdMin * 0.7);
@@ -154,7 +188,10 @@ function evaluateCapacity(day: DaySchedule, thresholdMin: number): CapacityAlert
     level: "error",
     minutesPerPatient: perPatient,
     threshold: thresholdMin,
-    message: `~${perPatient} min por paciente. No es factible mantener la calidad de consulta.`,
+    message:
+      perPatient < 1
+        ? `Menos de 1 min por paciente: ${day.maxAppointments} cupos no caben en ${mins} min de consulta.`
+        : `~${perPatient} min por paciente. No es factible mantener la calidad de consulta.`,
   };
 }
 
@@ -484,6 +521,7 @@ export default function HorariosPage() {
               ? stats.averageConsultationTime
               : 30;
           const capacityAlert = evaluateCapacity(day, thresholdMin);
+          const horarioError = problemaHorario(day);
           return (
           <div
             key={day.dayOfWeek}
@@ -613,6 +651,12 @@ export default function HorariosPage() {
                       </span>
                     </label>
                   </div>
+                  {horarioError && (
+                    <div className="mt-2 flex items-start gap-2 text-xs rounded-md px-3 py-2 bg-red-50 text-red-700 border border-red-200">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>{horarioError}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Max appointments */}
