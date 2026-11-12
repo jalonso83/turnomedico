@@ -515,31 +515,22 @@ export default function TurnosPage() {
             numeran las citas nuevas.
           </p>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-            <span>Abrir los avisos en:</span>
-            {(
-              [
-                ["app", "App de WhatsApp"],
-                ["web", "WhatsApp Web"],
-              ] as const
-            ).map(([m, etiqueta]) => (
-              <button
-                key={m}
-                onClick={() => cambiarModoWa(m)}
-                className={`px-2.5 py-1 rounded-full border ${
-                  modoWa === m
-                    ? "border-green-600 bg-green-50 text-green-700"
-                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                {etiqueta}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-gray-400 mt-1">
-            {modoWa === "app"
-              ? "Cada aviso se abre en la app de WhatsApp de esta computadora, sin abrir pestañas. La primera vez el navegador pide permiso: marca \"Permitir siempre\"."
-              : "WhatsApp Web abre una pestaña nueva por cada aviso; WhatsApp no permite reutilizarla. Si tienes la app instalada, usa la otra opción."}
+          <p className="text-xs text-gray-400 mt-4">
+            {modoWa === "app" ? (
+              <>
+                ¿No tienes la app de WhatsApp en esta computadora?{" "}
+                <button onClick={() => cambiarModoWa("web")} className="underline hover:text-gray-600">
+                  Usar WhatsApp Web
+                </button>
+              </>
+            ) : (
+              <>
+                Los avisos se abren en WhatsApp Web, una pestaña por aviso.{" "}
+                <button onClick={() => cambiarModoWa("app")} className="underline hover:text-gray-600">
+                  Usar la app de WhatsApp
+                </button>
+              </>
+            )}
           </p>
         </>
       )}
